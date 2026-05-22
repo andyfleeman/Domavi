@@ -21,10 +21,11 @@
 <body>
   <div id="root"></div>
   <script>
-    // Load the JSX file, transform it with Babel, then mount
     fetch('mortgage-calculator.jsx')
       .then(r => r.text())
       .then(code => {
+        // Remove export default so VantageMortgage becomes a plain global function
+        code = code.replace('export default function VantageMortgage', 'function VantageMortgage');
         const transformed = Babel.transform(code, { presets: ['react'] }).code;
         const script = document.createElement('script');
         script.textContent = transformed;
