@@ -343,22 +343,23 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
     let bal = principal, month = 0, tot = 0;
     let cPI = newPI, cMR = mr;
     let rcD = false, rfD = false;
-    // Deep copy recast events so array isn't consumed across calls
     const rcEvents = recastEvents.map(e => ({ ...e }));
     const baseTerm = term * 12;
     const cap = baseTerm + (refiEnabled ? refiTermYears * 12 : 0);
     const lumpMonthSet = applyLump ? getLumpMonths(cap) : new Set();
     const rows = [];
-    // Track new payments for each recast event (for display)
-    const recastPayments = {};
 
     while (bal > 0.01 && month < cap) {
-      let rcY = false, rfY = false, mrYears = [];
+      // Events that fired this year (for row annotation)
+      let rcY = false, rfY = false;
+      const recastEventsThisYear = [];
+
       for (let m = 0; m < 12 && bal > 0.01 && month < cap; m++) {
         // Proceeds recast
         if (!rcD && month === overlapMonths) {
           bal = Math.max(0, bal - proceedsApplied);
-          cPI = recastPI > 0 ? recastPI : cPI;
+          const piAfter = recastPI > 0 ? recastPI : localCalcPI(bal, rate, baseTerm - month);
+          cPI = piAfter + monthlyEscrow;
           rcD = true; rcY = true;
         }
         // Refi
@@ -367,33 +368,33 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
           cPI = localCalcPI(bal, refiRate, refiTermYears * 12) + monthlyEscrow;
           rfD = true; rfY = true;
         }
-        // Manual recasts — apply all that land on this month
+        // Manual recasts
         while (rcEvents.length > 0 && rcEvents[0].idx === month) {
           const ev = rcEvents.shift();
           bal = Math.max(0, bal - ev.lump);
-          // Remaining months = original term end minus current month (not cap)
           const moRemaining = Math.max(1, baseTerm - month);
-          const newPI = localCalcPI(bal, rate, moRemaining);
-          cPI = newPI + monthlyEscrow;
-          recastPayments[ev.id] = cPI;
-          mrYears.push({ id: ev.id, payment: cPI });
+          const piAfter = localCalcPI(bal, rate, moRemaining);
+          cPI = piAfter + monthlyEscrow;
+          recastEventsThisYear.push({ id: ev.id, payment: cPI });
         }
-        // Extra payments
+        // Payment
         const lumpExtra = lumpMonthSet.has(month) ? lumpAmount : 0;
         const totalExtra = extraMonthly + lumpExtra;
         const ic = bal * cMR;
-        const princPaid = Math.min(bal, Math.max(0, cPI - ic - monthlyEscrow + totalExtra));
+        // Principal paid = full payment minus interest minus escrow plus any extra
+        const princPaid = Math.min(bal, Math.max(0, cPI - monthlyEscrow - ic + totalExtra));
         bal = Math.max(0, bal - princPaid);
         tot += ic;
         month++;
       }
+
       rows.push({
         year: Math.floor(month / 12),
         balance: Math.round(bal),
         totalInterestPaid: Math.round(tot),
         recastThisYear: rcY,
         refiThisYear: rfY,
-        manualRecastEvents: mrYears, // array of {id, payment}
+        manualRecastEvents: recastEventsThisYear,
       });
       if (bal < 0.01) break;
     }
@@ -644,58 +645,52 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
             <div key={h} style={{ fontSize: "11px", color: "rgba(255,255,255,0.85)", fontFamily: SF, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: h === "Yr" || h === "Date" ? "left" : "right" }}>{h}</div>
           ))}
         </div>
-        {/* Rows — use withExtra as primary when lump mode active, base otherwise */}
-        {(() => {
-          // When lump sum mode: primary schedule IS withExtra (it has the early payoff)
-          // When monthly mode: base drives structure, withExtra drives +Extra column
-          const primaryRows = (hasExtra && extraMode === "lump") ? withExtra.rows : base.rows;
-          const secondaryRows = (hasExtra && extraMode === "lump") ? base.rows : withExtra.rows;
-          return primaryRows.map((row, i) => {
-            const sRow = secondaryRows[i];
-            const isPaid = hasExtra && extraMode === "monthly" && !sRow;
-            const sBal = sRow ? sRow.balance : 0;
-            const sInt = sRow ? sRow.totalInterestPaid : withExtra.totalInterest;
-            return (
-              <div key={row.year}>
-                {row.recastThisYear && (
-                  <div style={{ background: C.blueBg, padding: "8px 20px", borderBottom: "0.5px solid rgba(192,22,106,0.15)" }}>
-                    <div style={{ fontSize: "12px", fontWeight: 600, color: C.blue, fontFamily: SF }}>Proceeds Recast — payment drops to {fmtFull(recastPI)}/mo</div>
+        {/* Rows — base always drives structure; withExtra drives +Extra column */}
+        {base.rows.map((row, i) => {
+          const eRow = withExtra.rows[i];
+          const eBal = eRow ? eRow.balance : null;
+          const isPaidEarly = hasExtra && !eRow;
+          return (
+            <div key={i}>
+              {row.recastThisYear && (
+                <div style={{ background: C.blueBg, padding: "8px 20px", borderBottom: "0.5px solid rgba(192,22,106,0.15)" }}>
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: C.blue, fontFamily: SF }}>
+                    Proceeds Recast — new payment {fmtFull((recastPI > 0 ? recastPI : 0) + monthlyEscrow)}/mo{monthlyEscrow > 0 ? " (incl. escrow)" : ""}
+                  </div>
+                </div>
+              )}
+              {row.refiThisYear && (
+                <div style={{ background: C.amberBg, padding: "8px 20px", borderBottom: "0.5px solid rgba(196,94,0,0.15)" }}>
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: C.amber, fontFamily: SF }}>
+                    Refi — {refiRate.toFixed(2)}% · {refiTermYears}yr · {refiPayment ? fmtFull(refiPayment) : "—"}/mo{monthlyEscrow > 0 ? " (incl. escrow)" : ""}
+                  </div>
+                </div>
+              )}
+              {row.manualRecastEvents && row.manualRecastEvents.length > 0 && row.manualRecastEvents.map(ev => (
+                <div key={ev.id} style={{ background: C.greenBg, padding: "8px 20px", borderBottom: "0.5px solid rgba(11,143,143,0.15)" }}>
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: C.green, fontFamily: SF }}>
+                    Future Recast — new payment {fmtFull(ev.payment)}/mo{monthlyEscrow > 0 ? " (incl. escrow)" : ""}
+                  </div>
+                </div>
+              ))}
+              <div style={{ display: "grid", gridTemplateColumns: hasExtra ? "36px 48px 1fr 1fr 1fr" : "36px 48px 1fr 1fr", gap: "8px", padding: "13px 20px", background: i % 2 === 0 ? "#fff" : "rgba(120,80,160,0.04)", borderBottom: "0.5px solid rgba(60,0,80,0.07)" }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: C.blue, fontFamily: SF }}>{row.year}</div>
+                <div style={{ fontSize: "12px", color: C.dim, fontFamily: SF }}>{getYearDate(row.year)}</div>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: C.text, fontFamily: SF, textAlign: "right" }}>
+                  {row.balance < 1 ? <span style={{ color: C.green }}>✓</span> : fmt(row.balance)}
+                </div>
+                {hasExtra && (
+                  <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: SF, textAlign: "right", color: isPaidEarly ? C.green : eBal !== null && eBal < row.balance ? C.green : C.dim }}>
+                    {isPaidEarly ? "✓ paid off" : eBal !== null ? fmt(eBal) : "—"}
                   </div>
                 )}
-                {row.refiThisYear && (
-                  <div style={{ background: C.amberBg, padding: "8px 20px", borderBottom: "0.5px solid rgba(196,94,0,0.15)" }}>
-                    <div style={{ fontSize: "12px", fontWeight: 600, color: C.amber, fontFamily: SF }}>Refi — {refiRate.toFixed(2)}% · {refiTermYears}yr · {refiPayment ? fmtFull(refiPayment) : "—"}/mo</div>
-                  </div>
-                )}
-                {row.manualRecastEvents && row.manualRecastEvents.length > 0 && (
-                  <div style={{ background: C.greenBg, padding: "8px 20px", borderBottom: "0.5px solid rgba(11,143,143,0.15)" }}>
-                    {row.manualRecastEvents.map(ev => (
-                      <div key={ev.id} style={{ fontSize: "12px", fontWeight: 600, color: C.green, fontFamily: SF }}>
-                        Future Recast — new payment {fmtFull(ev.payment)}/mo{monthlyEscrow > 0 ? " (incl. escrow)" : ""}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div style={{ display: "grid", gridTemplateColumns: hasExtra ? "36px 48px 1fr 1fr 1fr" : "36px 48px 1fr 1fr", gap: "8px", padding: "13px 20px", background: i % 2 === 0 ? "#fff" : "rgba(120,80,160,0.04)", borderBottom: "0.5px solid rgba(60,0,80,0.07)" }}>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: C.blue, fontFamily: SF }}>{row.year}</div>
-                  <div style={{ fontSize: "12px", color: C.dim, fontFamily: SF }}>{getYearDate(row.year)}</div>
-                  <div style={{ fontSize: "13px", fontWeight: 600, color: C.text, fontFamily: SF, textAlign: "right" }}>{row.balance < 1 ? <span style={{ color: C.green }}>✓</span> : fmt(row.balance)}</div>
-                  {hasExtra && extraMode === "monthly" && (
-                    <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: SF, textAlign: "right", color: isPaid || sBal < row.balance ? C.green : C.text }}>
-                      {isPaid ? "✓" : fmt(sBal)}
-                    </div>
-                  )}
-                  {hasExtra && extraMode === "lump" && (
-                    <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: SF, textAlign: "right", color: sBal > row.balance ? C.dim : C.green }}>
-                      {sRow ? fmt(sBal) : "—"}
-                    </div>
-                  )}
-                  <div style={{ fontSize: "13px", color: C.dim, fontFamily: SF, textAlign: "right" }}>{fmt(row.totalInterestPaid)}</div>
+                <div style={{ fontSize: "13px", color: C.dim, fontFamily: SF, textAlign: "right" }}>
+                  {fmt(row.totalInterestPaid)}
                 </div>
               </div>
-            );
-          });
-        })()}
+            </div>
+          );
+        })}
       </Card>
 
       {/* Summary card */}
