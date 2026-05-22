@@ -625,38 +625,54 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
             <div key={h} style={{ fontSize: "11px", color: "rgba(255,255,255,0.85)", fontFamily: SF, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: h === "Yr" || h === "Date" ? "left" : "right" }}>{h}</div>
           ))}
         </div>
-        {/* Rows */}
-        {base.rows.map((row, i) => {
-          const eRow = withExtra.rows[i];
-          const isPaid = hasExtra && !eRow;
-          const eBal = eRow ? eRow.balance : 0;
-          return (
-            <div key={row.year}>
-              {row.recastThisYear && (
-                <div style={{ background: C.blueBg, padding: "8px 20px", borderBottom: "0.5px solid rgba(192,22,106,0.15)" }}>
-                  <div style={{ fontSize: "12px", fontWeight: 600, color: C.blue, fontFamily: SF }}>Proceeds Recast — payment drops to {fmtFull(recastPI)}/mo</div>
+        {/* Rows — use withExtra as primary when lump mode active, base otherwise */}
+        {(() => {
+          // When lump sum mode: primary schedule IS withExtra (it has the early payoff)
+          // When monthly mode: base drives structure, withExtra drives +Extra column
+          const primaryRows = (hasExtra && extraMode === "lump") ? withExtra.rows : base.rows;
+          const secondaryRows = (hasExtra && extraMode === "lump") ? base.rows : withExtra.rows;
+          return primaryRows.map((row, i) => {
+            const sRow = secondaryRows[i];
+            const isPaid = hasExtra && extraMode === "monthly" && !sRow;
+            const sBal = sRow ? sRow.balance : 0;
+            const sInt = sRow ? sRow.totalInterestPaid : withExtra.totalInterest;
+            return (
+              <div key={row.year}>
+                {row.recastThisYear && (
+                  <div style={{ background: C.blueBg, padding: "8px 20px", borderBottom: "0.5px solid rgba(192,22,106,0.15)" }}>
+                    <div style={{ fontSize: "12px", fontWeight: 600, color: C.blue, fontFamily: SF }}>Proceeds Recast — payment drops to {fmtFull(recastPI)}/mo</div>
+                  </div>
+                )}
+                {row.refiThisYear && (
+                  <div style={{ background: C.amberBg, padding: "8px 20px", borderBottom: "0.5px solid rgba(196,94,0,0.15)" }}>
+                    <div style={{ fontSize: "12px", fontWeight: 600, color: C.amber, fontFamily: SF }}>Refi — {refiRate.toFixed(2)}% · {refiTermYears}yr · {refiPayment ? fmtFull(refiPayment) : "—"}/mo</div>
+                  </div>
+                )}
+                {row.manualRecastIds && row.manualRecastIds.length > 0 && (
+                  <div style={{ background: C.greenBg, padding: "8px 20px", borderBottom: "0.5px solid rgba(11,143,143,0.15)" }}>
+                    <div style={{ fontSize: "12px", fontWeight: 600, color: C.green, fontFamily: SF }}>Future Recast — payment recalculated</div>
+                  </div>
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: hasExtra ? "36px 48px 1fr 1fr 1fr" : "36px 48px 1fr 1fr", gap: "8px", padding: "13px 20px", background: i % 2 === 0 ? "#fff" : "rgba(120,80,160,0.04)", borderBottom: "0.5px solid rgba(60,0,80,0.07)" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: C.blue, fontFamily: SF }}>{row.year}</div>
+                  <div style={{ fontSize: "12px", color: C.dim, fontFamily: SF }}>{getYearDate(row.year)}</div>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: C.text, fontFamily: SF, textAlign: "right" }}>{row.balance < 1 ? <span style={{ color: C.green }}>✓</span> : fmt(row.balance)}</div>
+                  {hasExtra && extraMode === "monthly" && (
+                    <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: SF, textAlign: "right", color: isPaid || sBal < row.balance ? C.green : C.text }}>
+                      {isPaid ? "✓" : fmt(sBal)}
+                    </div>
+                  )}
+                  {hasExtra && extraMode === "lump" && (
+                    <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: SF, textAlign: "right", color: sBal > row.balance ? C.dim : C.green }}>
+                      {sRow ? fmt(sBal) : "—"}
+                    </div>
+                  )}
+                  <div style={{ fontSize: "13px", color: C.dim, fontFamily: SF, textAlign: "right" }}>{fmt(row.totalInterestPaid)}</div>
                 </div>
-              )}
-              {row.refiThisYear && (
-                <div style={{ background: C.amberBg, padding: "8px 20px", borderBottom: "0.5px solid rgba(196,94,0,0.15)" }}>
-                  <div style={{ fontSize: "12px", fontWeight: 600, color: C.amber, fontFamily: SF }}>Refi — {refiRate.toFixed(2)}% · {refiTermYears}yr · {refiPayment ? fmtFull(refiPayment) : "—"}/mo</div>
-                </div>
-              )}
-              {row.manualRecastIds && row.manualRecastIds.length > 0 && (
-                <div style={{ background: C.greenBg, padding: "8px 20px", borderBottom: "0.5px solid rgba(11,143,143,0.15)" }}>
-                  <div style={{ fontSize: "12px", fontWeight: 600, color: C.green, fontFamily: SF }}>Future Recast — payment recalculated</div>
-                </div>
-              )}
-              <div style={{ display: "grid", gridTemplateColumns: hasExtra ? "36px 48px 1fr 1fr 1fr" : "36px 48px 1fr 1fr", gap: "8px", padding: "13px 20px", background: i % 2 === 0 ? "#fff" : "rgba(120,80,160,0.04)", borderBottom: "0.5px solid rgba(60,0,80,0.07)" }}>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: C.blue, fontFamily: SF }}>{row.year}</div>
-                <div style={{ fontSize: "12px", color: C.dim, fontFamily: SF }}>{getYearDate(row.year)}</div>
-                <div style={{ fontSize: "13px", fontWeight: 600, color: C.text, fontFamily: SF, textAlign: "right" }}>{row.balance < 1 ? <span style={{ color: C.green }}>✓</span> : fmt(row.balance)}</div>
-                {hasExtra && <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: SF, textAlign: "right", color: isPaid || eBal < row.balance ? C.green : C.text }}>{isPaid ? "✓" : fmt(eBal)}</div>}
-                <div style={{ fontSize: "13px", color: C.dim, fontFamily: SF, textAlign: "right" }}>{fmt(row.totalInterestPaid)}</div>
               </div>
-            </div>
-          );
-        })}
+            );
+          });
+        })()}
       </Card>
 
       {/* Summary card */}
