@@ -20,10 +20,23 @@
 </head>
 <body>
   <div id="root"></div>
-  <script type="text/babel" src="mortgage-calculator.jsx" data-presets="react"></script>
-  <script type="text/babel" data-presets="react">
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(React.createElement(VantageMortgage));
+  <script>
+    // Load the JSX file, transform it with Babel, then mount
+    fetch('mortgage-calculator.jsx')
+      .then(r => r.text())
+      .then(code => {
+        const transformed = Babel.transform(code, { presets: ['react'] }).code;
+        const script = document.createElement('script');
+        script.textContent = transformed;
+        document.head.appendChild(script);
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(VantageMortgage));
+      })
+      .catch(e => {
+        document.getElementById('root').innerHTML =
+          '<div style="padding:40px;font-family:sans-serif;color:#c0166a">' +
+          '<h2>Loading error</h2><pre>' + e.message + '</pre></div>';
+      });
   </script>
 </body>
 </html>
