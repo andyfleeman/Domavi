@@ -343,39 +343,58 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
     let bal = principal, month = 0, tot = 0;
     let cPI = newPI, cMR = mr;
     let rcD = false, rfD = false;
-    const rcEvents = [...recastEvents];
-    const cap = term * 12 + (refiEnabled ? refiTermYears * 12 : 0);
+    // Deep copy recast events so array isn't consumed across calls
+    const rcEvents = recastEvents.map(e => ({ ...e }));
+    const baseTerm = term * 12;
+    const cap = baseTerm + (refiEnabled ? refiTermYears * 12 : 0);
     const lumpMonthSet = applyLump ? getLumpMonths(cap) : new Set();
     const rows = [];
+    // Track new payments for each recast event (for display)
+    const recastPayments = {};
 
     while (bal > 0.01 && month < cap) {
       let rcY = false, rfY = false, mrYears = [];
       for (let m = 0; m < 12 && bal > 0.01 && month < cap; m++) {
+        // Proceeds recast
         if (!rcD && month === overlapMonths) {
           bal = Math.max(0, bal - proceedsApplied);
           cPI = recastPI > 0 ? recastPI : cPI;
           rcD = true; rcY = true;
         }
+        // Refi
         if (refiEnabled && !rfD && refiMonthIndex !== null && month === refiMonthIndex) {
           cMR = refiRate / 100 / 12;
-          cPI = localCalcPI(bal, refiRate, refiTermYears * 12);
+          cPI = localCalcPI(bal, refiRate, refiTermYears * 12) + monthlyEscrow;
           rfD = true; rfY = true;
         }
+        // Manual recasts — apply all that land on this month
         while (rcEvents.length > 0 && rcEvents[0].idx === month) {
           const ev = rcEvents.shift();
           bal = Math.max(0, bal - ev.lump);
-          cPI = localCalcPI(bal, rate, cap - month);
-          mrYears.push(ev.id);
+          // Remaining months = original term end minus current month (not cap)
+          const moRemaining = Math.max(1, baseTerm - month);
+          const newPI = localCalcPI(bal, rate, moRemaining);
+          cPI = newPI + monthlyEscrow;
+          recastPayments[ev.id] = cPI;
+          mrYears.push({ id: ev.id, payment: cPI });
         }
+        // Extra payments
         const lumpExtra = lumpMonthSet.has(month) ? lumpAmount : 0;
         const totalExtra = extraMonthly + lumpExtra;
         const ic = bal * cMR;
-        const princPaid = Math.min(bal, cPI - ic + totalExtra);
+        const princPaid = Math.min(bal, Math.max(0, cPI - ic - monthlyEscrow + totalExtra));
         bal = Math.max(0, bal - princPaid);
         tot += ic;
         month++;
       }
-      rows.push({ year: Math.floor(month / 12), balance: Math.round(bal), totalInterestPaid: Math.round(tot), recastThisYear: rcY, refiThisYear: rfY, manualRecastIds: mrYears });
+      rows.push({
+        year: Math.floor(month / 12),
+        balance: Math.round(bal),
+        totalInterestPaid: Math.round(tot),
+        recastThisYear: rcY,
+        refiThisYear: rfY,
+        manualRecastEvents: mrYears, // array of {id, payment}
+      });
       if (bal < 0.01) break;
     }
     return { rows, finalMonth: month, totalInterest: Math.round(tot) };
@@ -648,9 +667,13 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
                     <div style={{ fontSize: "12px", fontWeight: 600, color: C.amber, fontFamily: SF }}>Refi — {refiRate.toFixed(2)}% · {refiTermYears}yr · {refiPayment ? fmtFull(refiPayment) : "—"}/mo</div>
                   </div>
                 )}
-                {row.manualRecastIds && row.manualRecastIds.length > 0 && (
+                {row.manualRecastEvents && row.manualRecastEvents.length > 0 && (
                   <div style={{ background: C.greenBg, padding: "8px 20px", borderBottom: "0.5px solid rgba(11,143,143,0.15)" }}>
-                    <div style={{ fontSize: "12px", fontWeight: 600, color: C.green, fontFamily: SF }}>Future Recast — payment recalculated</div>
+                    {row.manualRecastEvents.map(ev => (
+                      <div key={ev.id} style={{ fontSize: "12px", fontWeight: 600, color: C.green, fontFamily: SF }}>
+                        Future Recast — new payment {fmtFull(ev.payment)}/mo{monthlyEscrow > 0 ? " (incl. escrow)" : ""}
+                      </div>
+                    ))}
                   </div>
                 )}
                 <div style={{ display: "grid", gridTemplateColumns: hasExtra ? "36px 48px 1fr 1fr 1fr" : "36px 48px 1fr 1fr", gap: "8px", padding: "13px 20px", background: i % 2 === 0 ? "#fff" : "rgba(120,80,160,0.04)", borderBottom: "0.5px solid rgba(60,0,80,0.07)" }}>
