@@ -287,10 +287,13 @@ function DollarInput({ label, value, onChange, hint }) {
 // ── Amort Tab ─────────────────────────────────────────────────────────────────
 function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proceedsApplied, extraPayment, setExtraPayment, loanStartMonth, loanStartYear, setLoanStartMonth, setLoanStartYear, refiEnabled, setRefiEnabled, refiMonth, setRefiMonth, refiYear, setRefiYear, refiRate, setRefiRate, refiTermYears, setRefiTermYears, monthlyEscrow, manualRecasts, setManualRecasts }) {
   const [showRecastVsRefi, setShowRecastVsRefi] = useState(false);
-  const [extraMode, setExtraMode]   = useState("monthly"); // "monthly" | "lump"
-  const [lumpAmount, setLumpAmount] = useState(5000);
-  const [lumpFreq, setLumpFreq]     = useState("annual");  // "quarterly"|"biannual"|"annual"
-  const [lumpMonth, setLumpMonth]   = useState(1);
+  const [applyMonthly,      setApplyMonthly]      = useState(false);
+  const [applyLumpSum,      setApplyLumpSum]      = useState(false);
+  const [monthlyStartMonth, setMonthlyStartMonth] = useState(() => new Date().getMonth() + 1);
+  const [monthlyStartYear,  setMonthlyStartYear]  = useState(() => new Date().getFullYear());
+  const [lumpAmount,        setLumpAmount]        = useState(5000);
+  const [lumpFreq,          setLumpFreq]          = useState("annual");
+  const [lumpMonth,         setLumpMonth]         = useState(1);
   const mr = rate / 100 / 12;
   const currentYear = new Date().getFullYear();
 
@@ -321,7 +324,12 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
     return (p * m * Math.pow(1 + m, n)) / (Math.pow(1 + m, n) - 1);
   }
 
-  // Lump sum months — find the next occurrence of lumpMonth after loan start
+  // Month index when monthly extra payments begin
+  const monthlyStartOffset = (() => {
+    const s = new Date(loanStartYear, loanStartMonth - 1, 1);
+    const t = new Date(monthlyStartYear, monthlyStartMonth - 1, 1);
+    return Math.max(0, (t.getFullYear() - s.getFullYear()) * 12 + t.getMonth() - s.getMonth());
+  })();
   function getLumpMonths(totalMonths) {
     const freqMap = { quarterly: 3, biannual: 6, annual: 12 };
     const freq = freqMap[lumpFreq] || 12;
@@ -378,8 +386,9 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
           recastEventsThisYear.push({ id: ev.id, payment: cPI });
         }
         // Payment
-        const lumpExtra = lumpMonthSet.has(month) ? lumpAmount : 0;
-        const totalExtra = extraMonthly + lumpExtra;
+        const lumpExtra    = lumpMonthSet.has(month) ? lumpAmount : 0;
+        const monthlyExtra = (extraMonthly > 0 && month >= monthlyStartOffset) ? extraMonthly : 0;
+        const totalExtra   = monthlyExtra + lumpExtra;
         const ic = bal * cMR;
         // Principal paid = full payment minus interest minus escrow plus any extra
         const princPaid = Math.min(bal, Math.max(0, cPI - monthlyEscrow - ic + totalExtra));
@@ -402,10 +411,8 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
   }
 
   const base      = buildSchedule(0, false);
-  const withExtra = extraMode === "monthly"
-    ? buildSchedule(extraPayment, false)
-    : buildSchedule(0, true);
-  const hasExtra  = extraMode === "monthly" ? extraPayment > 0 : lumpAmount > 0;
+  const withExtra = buildSchedule(applyMonthly ? extraPayment : 0, applyLumpSum);
+  const hasExtra  = (applyMonthly && extraPayment > 0) || (applyLumpSum && lumpAmount > 0);
   const moSaved   = base.finalMonth - withExtra.finalMonth;
   const intSaved  = base.totalInterest - withExtra.totalInterest;
   const yrSaved   = Math.floor(moSaved / 12), moRem = moSaved % 12;
@@ -437,35 +444,70 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
       </div>
       <Card>
         <SectionLabel>Extra Payments</SectionLabel>
-        {/* Mode toggle */}
-        <div style={{ display: "flex", gap: "8px", padding: "0 20px 16px" }}>
-          {[{ id: "monthly", label: "Monthly" }, { id: "lump", label: "Lump Sum" }].map(m => (
-            <button key={m.id} onClick={() => setExtraMode(m.id)} style={{ flex: 1, padding: "10px 8px", borderRadius: "10px", border: "none", background: extraMode === m.id ? C.blueBg : "rgba(120,80,160,0.08)", color: extraMode === m.id ? C.blue : C.mid, fontSize: "14px", fontWeight: 600, fontFamily: SF, cursor: "pointer" }}>{m.label}</button>
-          ))}
-        </div>
-        {extraMode === "monthly" && (
-          <Field label="Additional principal / mo" value={extraPayment} min={0} max={5000} step={50} onChange={setExtraPayment} display={v => v === 0 ? "None" : "+" + fmt(v) + "/mo"} parse={parseDollar} prefix="$" inputMode="numeric" />
-        )}
-        {extraMode === "lump" && (
-          <>
-            <Field label="Lump sum amount" value={lumpAmount} min={500} max={100000} step={500} onChange={setLumpAmount} display={v => fmt(v)} parse={parseDollar} prefix="$" inputMode="numeric" />
-            <div style={{ padding: "0 20px 14px", borderBottom: "0.5px solid rgba(60,0,80,0.10)" }}>
-              <div style={{ fontSize: "12px", fontWeight: 600, color: C.mid, fontFamily: SF, marginBottom: "10px" }}>Frequency</div>
-              <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
-                {[{ id: "quarterly", label: "Quarterly" }, { id: "biannual", label: "Biannual" }, { id: "annual", label: "Annual" }].map(f => (
-                  <button key={f.id} onClick={() => setLumpFreq(f.id)} style={{ flex: 1, padding: "9px 4px", borderRadius: "9px", border: "none", background: lumpFreq === f.id ? C.blueBg : "rgba(120,80,160,0.08)", color: lumpFreq === f.id ? C.blue : C.mid, fontSize: "13px", fontWeight: 600, fontFamily: SF, cursor: "pointer" }}>{f.label}</button>
-                ))}
+
+        {/* ── Monthly extra ── */}
+        <div style={{ borderBottom: "0.5px solid rgba(60,0,80,0.10)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px" }}>
+            <div>
+              <div style={{ fontSize: "15px", fontWeight: 600, color: C.text, fontFamily: SF }}>Monthly Extra</div>
+              <div style={{ fontSize: "12px", color: C.dim, fontFamily: SF, marginTop: "2px" }}>
+                {applyMonthly && extraPayment > 0 ? "+" + fmt(extraPayment) + "/mo starting " + MONTHS_ABBR[monthlyStartMonth - 1] + " " + monthlyStartYear : "Additional principal each month"}
               </div>
-              <div style={{ fontSize: "12px", fontWeight: 600, color: C.mid, fontFamily: SF, marginBottom: "8px" }}>Starting month</div>
-              <select value={lumpMonth} onChange={e => setLumpMonth(Number(e.target.value))} style={{ width: "100%", padding: "10px 14px", borderRadius: "9px", border: "none", background: "rgba(120,80,160,0.08)", fontFamily: SF, fontSize: "14px", color: C.text, outline: "none" }}>
-                {MONTHS_ABBR.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-              </select>
             </div>
-            <div style={{ padding: "12px 20px 16px", fontSize: "13px", color: C.blue, fontFamily: SF }}>
-              {fmt(lumpAmount)} applied {lumpFreq === "quarterly" ? "every 3 months" : lumpFreq === "biannual" ? "every 6 months" : "once per year"} starting in {MONTHS_ABBR[lumpMonth - 1]}
+            <Toggle checked={applyMonthly} onChange={setApplyMonthly} />
+          </div>
+          {applyMonthly && (
+            <div style={{ animation: "fadeIn 0.15s ease" }}>
+              <Field label="Additional principal / mo" value={extraPayment} min={0} max={5000} step={50} onChange={setExtraPayment} display={v => v === 0 ? "None" : "+" + fmt(v) + "/mo"} parse={parseDollar} prefix="$" inputMode="numeric" />
+              <div style={{ padding: "0 20px 16px" }}>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: C.mid, fontFamily: SF, marginBottom: "10px" }}>Start date</div>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <select value={monthlyStartMonth} onChange={e => setMonthlyStartMonth(Number(e.target.value))} style={{ flex: 1, padding: "10px 14px", borderRadius: "9px", border: "none", background: "rgba(120,80,160,0.08)", fontFamily: SF, fontSize: "14px", color: C.text, outline: "none" }}>
+                    {MONTHS_ABBR.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                  </select>
+                  <select value={monthlyStartYear} onChange={e => setMonthlyStartYear(Number(e.target.value))} style={{ flex: 1, padding: "10px 14px", borderRadius: "9px", border: "none", background: "rgba(120,80,160,0.08)", fontFamily: SF, fontSize: "14px", color: C.text, outline: "none" }}>
+                    {Array.from({ length: 35 }, (_, i) => loanStartYear + i).map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
             </div>
-          </>
-        )}
+          )}
+        </div>
+
+        {/* ── Lump sum extra ── */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px" }}>
+            <div>
+              <div style={{ fontSize: "15px", fontWeight: 600, color: C.text, fontFamily: SF }}>Periodic Lump Sum</div>
+              <div style={{ fontSize: "12px", color: C.dim, fontFamily: SF, marginTop: "2px" }}>
+                {applyLumpSum && lumpAmount > 0 ? fmt(lumpAmount) + " " + (lumpFreq === "quarterly" ? "quarterly" : lumpFreq === "biannual" ? "biannually" : "annually") + " from " + MONTHS_ABBR[lumpMonth - 1] : "Periodic lump sum to principal"}
+              </div>
+            </div>
+            <Toggle checked={applyLumpSum} onChange={setApplyLumpSum} />
+          </div>
+          {applyLumpSum && (
+            <div style={{ animation: "fadeIn 0.15s ease", borderTop: "0.5px solid rgba(60,0,80,0.10)" }}>
+              <Field label="Lump sum amount" value={lumpAmount} min={500} max={100000} step={500} onChange={setLumpAmount} display={v => fmt(v)} parse={parseDollar} prefix="$" inputMode="numeric" />
+              <div style={{ padding: "0 20px 14px", borderBottom: "0.5px solid rgba(60,0,80,0.10)" }}>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: C.mid, fontFamily: SF, marginBottom: "10px" }}>Frequency</div>
+                <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
+                  {[{ id: "quarterly", label: "Quarterly" }, { id: "biannual", label: "Biannual" }, { id: "annual", label: "Annual" }].map(f => (
+                    <button key={f.id} onClick={() => setLumpFreq(f.id)} style={{ flex: 1, padding: "9px 4px", borderRadius: "9px", border: "none", background: lumpFreq === f.id ? C.blueBg : "rgba(120,80,160,0.08)", color: lumpFreq === f.id ? C.blue : C.mid, fontSize: "13px", fontWeight: 600, fontFamily: SF, cursor: "pointer" }}>{f.label}</button>
+                  ))}
+                </div>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: C.mid, fontFamily: SF, marginBottom: "8px" }}>Starting month</div>
+                <select value={lumpMonth} onChange={e => setLumpMonth(Number(e.target.value))} style={{ width: "100%", padding: "10px 14px", borderRadius: "9px", border: "none", background: "rgba(120,80,160,0.08)", fontFamily: SF, fontSize: "14px", color: C.text, outline: "none" }}>
+                  {MONTHS_ABBR.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                </select>
+              </div>
+              {applyMonthly && applyLumpSum && (
+                <div style={{ padding: "10px 20px 14px", fontSize: "13px", color: C.blue, fontFamily: SF }}>
+                  Both active: +{fmt(extraPayment)}/mo from {MONTHS_ABBR[monthlyStartMonth - 1]} {monthlyStartYear} · plus {fmt(lumpAmount)} {lumpFreq === "quarterly" ? "quarterly" : lumpFreq === "biannual" ? "biannually" : "annually"} from {MONTHS_ABBR[lumpMonth - 1]}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </Card>
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 20px 4px", minHeight: "52px" }}>
