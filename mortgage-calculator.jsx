@@ -321,63 +321,70 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
     return (p * m * Math.pow(1 + m, n)) / (Math.pow(1 + m, n) - 1);
   }
 
-  // Lump sum months derived from frequency + start month
+  // Lump sum months — find the next occurrence of lumpMonth after loan start
   function getLumpMonths(totalMonths) {
     const freqMap = { quarterly: 3, biannual: 6, annual: 12 };
     const freq = freqMap[lumpFreq] || 12;
-    const months = [];
-    // First lump at the chosen month relative to loan start
-    let startOffset = ((lumpMonth - loanStartMonth + 12) % 12) || freq;
-    for (let m = startOffset; m <= totalMonths; m += freq) months.push(m);
+    const months = new Set();
+    // How many months from loan start until we first hit lumpMonth
+    // e.g. loan starts June (6), lump month March (3) → next March is 9 months away
+    // e.g. loan starts June (6), lump month August (8) → next August is 2 months away
+    // e.g. loan starts June (6), lump month June (6) → first hit at freq months (next cycle)
+    let diff = lumpMonth - loanStartMonth;
+    if (diff <= 0) diff += 12; // always push to next occurrence, never month 0
+    // For non-annual frequencies, first hit is at diff, then every freq months
+    // But if freq < 12 we may hit the chosen month multiple times per year
+    // Simplest correct approach: start at diff, step by freq
+    for (let m = diff; m <= totalMonths; m += freq) months.add(m);
     return months;
   }
 
-  function buildSchedule(extraMonthly) {
+  function buildSchedule(extraMonthly, applyLump) {
     let bal = principal, month = 0, tot = 0;
     let cPI = newPI, cMR = mr;
     let rcD = false, rfD = false;
-    const rcEvents = [...recastEvents]; // copy sorted events
+    const rcEvents = [...recastEvents];
     const cap = term * 12 + (refiEnabled ? refiTermYears * 12 : 0);
-    const lumpMonths = extraMode === "lump" ? new Set(getLumpMonths(cap)) : new Set();
+    const lumpMonthSet = applyLump ? getLumpMonths(cap) : new Set();
     const rows = [];
 
     while (bal > 0.01 && month < cap) {
       let rcY = false, rfY = false, mrYears = [];
       for (let m = 0; m < 12 && bal > 0.01 && month < cap; m++) {
-        // Proceeds recast
         if (!rcD && month === overlapMonths) {
           bal = Math.max(0, bal - proceedsApplied);
           cPI = recastPI > 0 ? recastPI : cPI;
           rcD = true; rcY = true;
         }
-        // Refi
         if (refiEnabled && !rfD && refiMonthIndex !== null && month === refiMonthIndex) {
           cMR = refiRate / 100 / 12;
           cPI = localCalcPI(bal, refiRate, refiTermYears * 12);
           rfD = true; rfY = true;
         }
-        // Manual recasts — apply all that land on this month
         while (rcEvents.length > 0 && rcEvents[0].idx === month) {
           const ev = rcEvents.shift();
           bal = Math.max(0, bal - ev.lump);
           cPI = localCalcPI(bal, rate, cap - month);
           mrYears.push(ev.id);
         }
-        // Lump sum extra payment
-        const lumpExtra = (extraMode === "lump" && lumpMonths.has(month)) ? lumpAmount : 0;
+        const lumpExtra = lumpMonthSet.has(month) ? lumpAmount : 0;
+        const totalExtra = extraMonthly + lumpExtra;
         const ic = bal * cMR;
-        bal = Math.max(0, bal - Math.min(bal, cPI - ic + extraMonthly + lumpExtra));
+        const princPaid = Math.min(bal, cPI - ic + totalExtra);
+        bal = Math.max(0, bal - princPaid);
         tot += ic;
         month++;
       }
-      rows.push({ year: Math.floor(month / 12), balance: bal, totalInterestPaid: tot, recastThisYear: rcY, refiThisYear: rfY, manualRecastIds: mrYears });
+      rows.push({ year: Math.floor(month / 12), balance: Math.round(bal), totalInterestPaid: Math.round(tot), recastThisYear: rcY, refiThisYear: rfY, manualRecastIds: mrYears });
       if (bal < 0.01) break;
     }
-    return { rows, finalMonth: month, totalInterest: tot };
+    return { rows, finalMonth: month, totalInterest: Math.round(tot) };
   }
 
-  const base      = buildSchedule(0);
-  const withExtra = buildSchedule(extraMode === "monthly" ? extraPayment : 0);
+  const base      = buildSchedule(0, false);
+  const withExtra = extraMode === "monthly"
+    ? buildSchedule(extraPayment, false)
+    : buildSchedule(0, true);
   const hasExtra  = extraMode === "monthly" ? extraPayment > 0 : lumpAmount > 0;
   const moSaved   = base.finalMonth - withExtra.finalMonth;
   const intSaved  = base.totalInterest - withExtra.totalInterest;
