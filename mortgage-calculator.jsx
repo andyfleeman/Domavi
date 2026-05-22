@@ -1287,7 +1287,7 @@ function HelpDrawer({ tab }) {
   );
 }
 
-export default function DomaviMortgage() {
+function DomaviMortgage() {
   useEffect(() => {
     // PWA home screen icons
     const addLink = (rel, type, sizes, href) => {
