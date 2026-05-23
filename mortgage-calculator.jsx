@@ -603,11 +603,15 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: "0.5px solid rgba(60,0,80,0.10)", marginTop: "16px" }}>
             <div style={{ padding: "14px 20px", borderRight: "0.5px solid rgba(60,0,80,0.10)" }}>
               <div style={{ fontSize: "12px", color: C.dim, fontFamily: SF, marginBottom: "3px" }}>Original payoff</div>
-              <div style={{ fontSize: "14px", fontWeight: 600, color: C.text, fontFamily: SF }}>{getYearDate(Math.ceil(base.finalMonth / 12))}</div>
+              <div style={{ fontSize: "14px", fontWeight: 600, color: C.text, fontFamily: SF }}>
+                {(() => { const d = new Date(loanStartYear, loanStartMonth - 1 + base.finalMonth, 1); return MONTHS_ABBR[d.getMonth()] + " " + d.getFullYear(); })()}
+              </div>
             </div>
             <div style={{ padding: "14px 20px" }}>
               <div style={{ fontSize: "12px", color: C.green, fontFamily: SF, marginBottom: "3px" }}>With extra payments</div>
-              <div style={{ fontSize: "14px", fontWeight: 600, color: C.green, fontFamily: SF }}>{getYearDate(Math.ceil(withExtra.finalMonth / 12))}</div>
+              <div style={{ fontSize: "14px", fontWeight: 600, color: C.green, fontFamily: SF }}>
+                {(() => { const d = new Date(loanStartYear, loanStartMonth - 1 + withExtra.finalMonth, 1); return MONTHS_ABBR[d.getMonth()] + " " + d.getFullYear(); })()}
+              </div>
             </div>
           </div>
         </Card>
@@ -771,8 +775,12 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
           </div>
           <div style={{ padding: "18px 20px" }}>
             <div style={{ fontSize: "12px", fontWeight: 600, color: C.dim, fontFamily: SF, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Payoff date</div>
-            <div style={{ fontSize: "22px", fontWeight: 700, color: C.text, fontFamily: SF }}>{getYearDate(Math.ceil(base.finalMonth / 12))}</div>
-            {hasExtra && <div style={{ fontSize: "13px", fontWeight: 600, color: C.green, fontFamily: SF, marginTop: "4px" }}>{getYearDate(Math.ceil(withExtra.finalMonth / 12))} w/ extra</div>}
+            <div style={{ fontSize: "22px", fontWeight: 700, color: C.text, fontFamily: SF }}>
+              {(() => { const d = new Date(loanStartYear, loanStartMonth - 1 + base.finalMonth, 1); return MONTHS_ABBR[d.getMonth()] + " " + d.getFullYear(); })()}
+            </div>
+            {hasExtra && <div style={{ fontSize: "13px", fontWeight: 600, color: C.green, fontFamily: SF, marginTop: "4px" }}>
+              {(() => { const d = new Date(loanStartYear, loanStartMonth - 1 + withExtra.finalMonth, 1); return MONTHS_ABBR[d.getMonth()] + " " + d.getFullYear(); })()} w/ extra
+            </div>}
           </div>
         </div>
         <div style={{ padding: "14px 20px" }}>
@@ -2542,21 +2550,12 @@ Use current real rates from your web search. The values in the template above ar
                 <div style={{ fontSize: "12px", color: C.dim, fontFamily: SF, letterSpacing: "0.08em" }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · {isFirstHome ? "First Home" : isSellFirst ? "Sell First" : "Buy First"}</div>
               </div>
 
-              {/* Main tiles */}
+              {/* Main tiles — reordered: Mtg, Overlap, Proceeds, Recast, then extras, then Interest, then Resale */}
               {[
                 { color: "#c0166a", label: "① New Mtg",       val: fmtFull(calc.newTotal),     sub: fmt(homePrice) + " · " + (downMode === "dollar" ? ((downDollars / homePrice) * 100).toFixed(0) : downPct) + "% dn · " + rate.toFixed(2) + "% · " + term + "yr", extra: calc.needsPMI ? "PMI " + fmtFull(calc.monthlyPMI) + "/mo" : "" },
                 { color: "#6d1fa0", label: "② Overlap " + overlapMonths + "mo", val: fmtFull(calc.combinedMonthly), sub: "New " + fmtFull(calc.newTotal) + " + " + fmtFull(currentPayment), extra: "Total " + fmt(calc.totalBridgeCost) },
                 { color: "#0b6e6e", label: "③ Sale Proceeds", val: fmt(calc.netProceeds),      sub: fmt(salePrice) + " sale", extra: "Costs " + calc.totalSellingPct.toFixed(1) + "% · Payoff " + fmt(currentBalance) },
                 { color: "#0b8f8f", label: "④ After Recast",  val: fmtFull(calc.recastTotal) + "/mo", sub: "Bal " + fmt(calc.recastPrincipal), extra: "Save " + fmtFull(calc.monthlySavings) + "/mo" },
-                { color: "#8b1a8f", label: "⑤ Resale " + (resaleCalc.yrs > 0 ? resaleCalc.yrs + "yr" : "") + (resaleCalc.mos > 0 ? " " + resaleCalc.mos + "mo" : ""), val: fmt(resaleCalc.netResaleProceeds), sub: newHomeSqft.toLocaleString() + " sqft · $" + resaleCalc.activePpsf + "/ft", extra: "Est. " + fmt(resaleCalc.projectedPrice) },
-                { color: "#a01660", label: "⑥ Total Interest",
-                  val: amortResult.base ? fmt(amortResult.base.totalInterest) : fmt(Math.round(calc.newPI * term * 12 - calc.principal)),
-                  sub: amortResult.withExtra && amortResult.hasExtra ? fmt(amortResult.withExtra.totalInterest) + " w/ extra" : "Over loan life",
-                  extra: amortResult.hasExtra && amortResult.base
-                    ? "Save " + fmt(amortResult.base.totalInterest - amortResult.withExtra.totalInterest)
-                    : "",
-                  extraColor: "#6ee7b7",
-                },
               ].reduce((rows, item, i) => { if (i % 2 === 0) rows.push([item]); else rows[rows.length - 1].push(item); return rows; }, []).map((pair, ri) => (
                 <div key={ri} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
                   {pair.map(({ color, label, val, sub, extra, extraColor }) => (
@@ -2570,7 +2569,7 @@ Use current real rates from your web search. The values in the template above ar
                 </div>
               ))}
 
-              {/* Extra payment tiles — only show when active */}
+              {/* Extra payment tiles — Monthly Extra + Lump Sum before Total Interest */}
               {(applyMonthly || applyLumpSum) && (
                 <div style={{ display: "grid", gridTemplateColumns: applyMonthly && applyLumpSum ? "1fr 1fr" : "1fr", gap: "8px", marginBottom: "8px" }}>
                   {applyMonthly && extraPayment > 0 && (
@@ -2600,28 +2599,49 @@ Use current real rates from your web search. The values in the template above ar
                 </div>
               )}
 
-              {/* Payoff date tile */}
-              {amortResult.base && (
-                <div style={{ background: "#3d0070", borderRadius: "12px", padding: "12px 12px", marginBottom: "8px" }}>
-                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF, textTransform: "uppercase", letterSpacing: "0.08em" }}>Payoff Date</div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "4px" }}>
-                    <div>
-                      <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)", fontFamily: SF }}>Base schedule</div>
-                      <div style={{ fontSize: "16px", fontWeight: 700, color: "#fff", fontFamily: SF }}>
-                        {(() => { const d = new Date(loanStartYear, loanStartMonth - 1 + amortResult.base.finalMonth, 1); return MONTHS_ABBR[d.getMonth()] + " " + d.getFullYear(); })()}
-                      </div>
+              {/* Total Interest tile */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+                <div style={{ background: "#a01660", borderRadius: "12px", padding: "12px 12px" }}>
+                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF, textTransform: "uppercase", letterSpacing: "0.08em" }}>⑤ Total Interest</div>
+                  <div style={{ fontSize: "18px", fontWeight: 800, color: "#fff", fontFamily: SF, lineHeight: 1.1, marginTop: "2px" }}>
+                    {amortResult.base ? fmt(amortResult.base.totalInterest) : fmt(Math.round(calc.newPI * term * 12 - calc.principal))}
+                  </div>
+                  {amortResult.withExtra && amortResult.hasExtra && (
+                    <div style={{ fontSize: "12px", color: "#6ee7b7", fontFamily: SF, fontWeight: 600, marginTop: "6px" }}>{fmt(amortResult.withExtra.totalInterest)} w/ extra</div>
+                  )}
+                  {amortResult.hasExtra && amortResult.base && (
+                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF }}>Save {fmt(amortResult.base.totalInterest - amortResult.withExtra.totalInterest)}</div>
+                  )}
+                </div>
+
+                {/* Payoff date tile */}
+                {amortResult.base && (
+                  <div style={{ background: "#3d0070", borderRadius: "12px", padding: "12px 12px" }}>
+                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF, textTransform: "uppercase", letterSpacing: "0.08em" }}>Payoff Date</div>
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: "#fff", fontFamily: SF, marginTop: "4px" }}>
+                      {(() => { const d = new Date(loanStartYear, loanStartMonth - 1 + amortResult.base.finalMonth, 1); return MONTHS_ABBR[d.getMonth()] + " " + d.getFullYear(); })()}
                     </div>
                     {amortResult.hasExtra && (
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)", fontFamily: SF }}>With extra</div>
-                        <div style={{ fontSize: "16px", fontWeight: 700, color: "#6ee7b7", fontFamily: SF }}>
+                      <>
+                        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)", fontFamily: SF, marginTop: "6px" }}>w/ extra</div>
+                        <div style={{ fontSize: "14px", fontWeight: 700, color: "#6ee7b7", fontFamily: SF }}>
                           {(() => { const d = new Date(loanStartYear, loanStartMonth - 1 + amortResult.withExtra.finalMonth, 1); return MONTHS_ABBR[d.getMonth()] + " " + d.getFullYear(); })()}
                         </div>
-                      </div>
+                      </>
                     )}
                   </div>
+                )}
+              </div>
+
+              {/* Resale — always last */}
+              <div style={{ marginBottom: "8px" }}>
+                <div style={{ background: "#8b1a8f", borderRadius: "12px", padding: "12px 12px" }}>
+                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF, textTransform: "uppercase", letterSpacing: "0.08em" }}>⑥ Resale {resaleCalc.yrs > 0 ? resaleCalc.yrs + "yr" : ""}{resaleCalc.mos > 0 ? " " + resaleCalc.mos + "mo" : ""}</div>
+                  <div style={{ fontSize: "18px", fontWeight: 800, color: "#fff", fontFamily: SF, lineHeight: 1.1, marginTop: "2px" }}>{fmt(resaleCalc.netResaleProceeds)}</div>
+                  <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.80)", fontFamily: SF, fontWeight: 600, marginTop: "6px" }}>{newHomeSqft.toLocaleString()} sqft · ${resaleCalc.activePpsf}/ft</div>
+                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF }}>Est. {fmt(resaleCalc.projectedPrice)}</div>
                 </div>
-              )}
+              </div>
 
               <div style={{ textAlign: "center", background: C.pill, border: "none", borderRadius: "8px", padding: "10px 16px", fontSize: "12px", color: C.pillText, fontFamily: SF, letterSpacing: "0.06em", marginBottom: "14px" }}>Screenshot to save · All values from your inputs</div>
               <button onClick={saveScenario} style={{ width: "100%", padding: "16px", background: `linear-gradient(135deg,${C.blue},#8b1a8f)`, color: "#fff", border: "none", borderRadius: "12px", fontSize: "15px", fontWeight: 800, fontFamily: SF, cursor: "pointer" }}>Save This Scenario</button>
