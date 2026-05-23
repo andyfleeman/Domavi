@@ -285,16 +285,8 @@ function DollarInput({ label, value, onChange, hint }) {
 }
 
 // ── Amort Tab ─────────────────────────────────────────────────────────────────
-function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proceedsApplied, extraPayment, setExtraPayment, loanStartMonth, loanStartYear, setLoanStartMonth, setLoanStartYear, refiEnabled, setRefiEnabled, refiMonth, setRefiMonth, refiYear, setRefiYear, refiRate, setRefiRate, refiTermYears, setRefiTermYears, monthlyEscrow, manualRecasts, setManualRecasts }) {
+function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proceedsApplied, extraPayment, setExtraPayment, loanStartMonth, loanStartYear, setLoanStartMonth, setLoanStartYear, refiEnabled, setRefiEnabled, refiMonth, setRefiMonth, refiYear, setRefiYear, refiRate, setRefiRate, refiTermYears, setRefiTermYears, monthlyEscrow, manualRecasts, setManualRecasts, applyMonthly, setApplyMonthly, applyLumpSum, setApplyLumpSum, monthlyStartMonth, setMonthlyStartMonth, monthlyStartYear, setMonthlyStartYear, lumpAmount, setLumpAmount, lumpFreq, setLumpFreq, lumpMonth, setLumpMonth, lumpStartYear, setLumpStartYear }) {
   const [showRecastVsRefi, setShowRecastVsRefi] = useState(false);
-  const [applyMonthly,      setApplyMonthly]      = useState(false);
-  const [applyLumpSum,      setApplyLumpSum]      = useState(false);
-  const [monthlyStartMonth, setMonthlyStartMonth] = useState(() => new Date().getMonth() + 1);
-  const [monthlyStartYear,  setMonthlyStartYear]  = useState(() => new Date().getFullYear());
-  const [lumpAmount,        setLumpAmount]        = useState(5000);
-  const [lumpFreq,          setLumpFreq]          = useState("annual");
-  const [lumpMonth,         setLumpMonth]         = useState(1);
-  const [lumpStartYear,     setLumpStartYear]     = useState(() => new Date().getFullYear());
   const mr = rate / 100 / 12;
   const currentYear = new Date().getFullYear();
 
@@ -1558,12 +1550,20 @@ Use current real rates from your web search. The values in the template above ar
   const [refiYear,       setRefiYear]      = useState(() => initV("refiYear"));
   const [refiRate,       setRefiRate]      = useState(() => initV("refiRate"));
   const [refiTermYears,  setRefiTermYears] = useState(() => initV("refiTermYears"));
-  const [manualRecasts, setManualRecasts] = useState([{ id: 1, enabled: false, month: new Date().getMonth() + 1, year: new Date().getFullYear() + 5, lump: 25000 }]);
+  const [manualRecasts, setManualRecasts] = useState(() => initV("manualRecasts") || [{ id: 1, enabled: false, month: new Date().getMonth() + 1, year: new Date().getFullYear() + 5, lump: 25000 }]);
+  const [applyMonthly,      setApplyMonthly]      = useState(() => initV("applyMonthly") || false);
+  const [applyLumpSum,      setApplyLumpSum]       = useState(() => initV("applyLumpSum") || false);
+  const [monthlyStartMonth, setMonthlyStartMonth]  = useState(() => initV("monthlyStartMonth") || new Date().getMonth() + 1);
+  const [monthlyStartYear,  setMonthlyStartYear]   = useState(() => initV("monthlyStartYear") || new Date().getFullYear());
+  const [lumpAmount,        setLumpAmount]         = useState(() => initV("lumpAmount") || 5000);
+  const [lumpFreq,          setLumpFreq]           = useState(() => initV("lumpFreq") || "annual");
+  const [lumpMonth,         setLumpMonth]          = useState(() => initV("lumpMonth") || 1);
+  const [lumpStartYear,     setLumpStartYear]      = useState(() => initV("lumpStartYear") || new Date().getFullYear());
   const [resaleMonth,    setResaleMonth]   = useState(() => initV("resaleMonth"));
   const [resaleYear,     setResaleYear]    = useState(() => initV("resaleYear"));
 
   // Persist
-  const allState = { tab, purchaseMode, hasCurrentHome, homePrice, downPct, downDollars, downMode, rate, term, includeEscrow, taxRate, insurance, insuranceManual, newHomeState, newHomeCounty, newHomeSqft, saleState, saleCounty, saleHomeSqft, affordMode, applyProceedsToDown, additionalDownDollars, currentPayment, currentUtilities, overlapMonths, salePrice, currentBalance, closingCostsPct, listingAgentPct, buyerAgentPct, buyerConcessions, recastEnabled, proceedsApplyPct, pmiRate, extraPayment, sqft, homeAgeRange, pricingMode, loanStartMonth, loanStartYear, refiEnabled, refiMonth, refiYear, refiRate, refiTermYears, resaleMonth, resaleYear };
+  const allState = { tab, purchaseMode, hasCurrentHome, homePrice, downPct, downDollars, downMode, rate, term, includeEscrow, taxRate, insurance, insuranceManual, newHomeState, newHomeCounty, newHomeSqft, saleState, saleCounty, saleHomeSqft, affordMode, applyProceedsToDown, additionalDownDollars, currentPayment, currentUtilities, overlapMonths, salePrice, currentBalance, closingCostsPct, listingAgentPct, buyerAgentPct, buyerConcessions, recastEnabled, proceedsApplyPct, pmiRate, extraPayment, sqft, homeAgeRange, pricingMode, loanStartMonth, loanStartYear, refiEnabled, refiMonth, refiYear, refiRate, refiTermYears, resaleMonth, resaleYear, manualRecasts, applyMonthly, applyLumpSum, monthlyStartMonth, monthlyStartYear, lumpAmount, lumpFreq, lumpMonth, lumpStartYear };
   useEffect(() => { lsSet(STORAGE_KEY, allState); });
 
   // Mode flags — needed by memos below
@@ -2403,6 +2403,14 @@ Use current real rates from your web search. The values in the template above ar
               refiTermYears={refiTermYears} setRefiTermYears={setRefiTermYears}
               monthlyEscrow={monthlyEscrow}
               manualRecasts={manualRecasts} setManualRecasts={setManualRecasts}
+              applyMonthly={applyMonthly} setApplyMonthly={setApplyMonthly}
+              applyLumpSum={applyLumpSum} setApplyLumpSum={setApplyLumpSum}
+              monthlyStartMonth={monthlyStartMonth} setMonthlyStartMonth={setMonthlyStartMonth}
+              monthlyStartYear={monthlyStartYear} setMonthlyStartYear={setMonthlyStartYear}
+              lumpAmount={lumpAmount} setLumpAmount={setLumpAmount}
+              lumpFreq={lumpFreq} setLumpFreq={setLumpFreq}
+              lumpMonth={lumpMonth} setLumpMonth={setLumpMonth}
+              lumpStartYear={lumpStartYear} setLumpStartYear={setLumpStartYear}
             />
           )}
 
