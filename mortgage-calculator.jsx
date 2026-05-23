@@ -294,6 +294,7 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
   const [lumpAmount,        setLumpAmount]        = useState(5000);
   const [lumpFreq,          setLumpFreq]          = useState("annual");
   const [lumpMonth,         setLumpMonth]         = useState(1);
+  const [lumpStartYear,     setLumpStartYear]     = useState(() => new Date().getFullYear());
   const mr = rate / 100 / 12;
   const currentYear = new Date().getFullYear();
 
@@ -334,15 +335,12 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
     const freqMap = { quarterly: 3, biannual: 6, annual: 12 };
     const freq = freqMap[lumpFreq] || 12;
     const months = new Set();
-    // How many months from loan start until we first hit lumpMonth
-    // e.g. loan starts June (6), lump month March (3) → next March is 9 months away
-    // e.g. loan starts June (6), lump month August (8) → next August is 2 months away
-    // e.g. loan starts June (6), lump month June (6) → first hit at freq months (next cycle)
-    let diff = lumpMonth - loanStartMonth;
-    if (diff <= 0) diff += 12; // always push to next occurrence, never month 0
-    // For non-annual frequencies, first hit is at diff, then every freq months
-    // But if freq < 12 we may hit the chosen month multiple times per year
-    // Simplest correct approach: start at diff, step by freq
+    // Calculate exact offset from loan start to chosen start month/year
+    const loanStartDate = new Date(loanStartYear, loanStartMonth - 1, 1);
+    const lumpStartDate = new Date(lumpStartYear, lumpMonth - 1, 1);
+    let diff = (lumpStartDate.getFullYear() - loanStartDate.getFullYear()) * 12
+             + lumpStartDate.getMonth() - loanStartDate.getMonth();
+    if (diff <= 0) diff = freq; // if before loan start, use first freq interval
     for (let m = diff; m <= totalMonths; m += freq) months.add(m);
     return months;
   }
@@ -495,14 +493,19 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
                     <button key={f.id} onClick={() => setLumpFreq(f.id)} style={{ flex: 1, padding: "9px 4px", borderRadius: "9px", border: "none", background: lumpFreq === f.id ? C.blueBg : "rgba(120,80,160,0.08)", color: lumpFreq === f.id ? C.blue : C.mid, fontSize: "13px", fontWeight: 600, fontFamily: SF, cursor: "pointer" }}>{f.label}</button>
                   ))}
                 </div>
-                <div style={{ fontSize: "12px", fontWeight: 600, color: C.mid, fontFamily: SF, marginBottom: "8px" }}>Starting month</div>
-                <select value={lumpMonth} onChange={e => setLumpMonth(Number(e.target.value))} style={{ width: "100%", padding: "10px 14px", borderRadius: "9px", border: "none", background: "rgba(120,80,160,0.08)", fontFamily: SF, fontSize: "14px", color: C.text, outline: "none" }}>
-                  {MONTHS_ABBR.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-                </select>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: C.mid, fontFamily: SF, marginBottom: "8px" }}>Starting month &amp; year</div>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <select value={lumpMonth} onChange={e => setLumpMonth(Number(e.target.value))} style={{ flex: 1, padding: "10px 14px", borderRadius: "9px", border: "none", background: "rgba(120,80,160,0.08)", fontFamily: SF, fontSize: "14px", color: C.text, outline: "none" }}>
+                    {MONTHS_ABBR.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                  </select>
+                  <select value={lumpStartYear} onChange={e => setLumpStartYear(Number(e.target.value))} style={{ flex: 1, padding: "10px 14px", borderRadius: "9px", border: "none", background: "rgba(120,80,160,0.08)", fontFamily: SF, fontSize: "14px", color: C.text, outline: "none" }}>
+                    {Array.from({ length: 35 }, (_, i) => loanStartYear + i).map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
               </div>
               {applyMonthly && applyLumpSum && (
                 <div style={{ padding: "10px 20px 14px", fontSize: "13px", color: C.blue, fontFamily: SF }}>
-                  Both active: +{fmt(extraPayment)}/mo from {MONTHS_ABBR[monthlyStartMonth - 1]} {monthlyStartYear} · plus {fmt(lumpAmount)} {lumpFreq === "quarterly" ? "quarterly" : lumpFreq === "biannual" ? "biannually" : "annually"} from {MONTHS_ABBR[lumpMonth - 1]}
+                  Both active: +{fmt(extraPayment)}/mo from {MONTHS_ABBR[monthlyStartMonth - 1]} {monthlyStartYear} · plus {fmt(lumpAmount)} {lumpFreq === "quarterly" ? "quarterly" : lumpFreq === "biannual" ? "biannually" : "annually"} from {MONTHS_ABBR[lumpMonth - 1]} {lumpStartYear}
                 </div>
               )}
             </div>
@@ -681,16 +684,28 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
 
       {/* Amortization table */}
       <Card style={{ marginBottom: "12px", overflow: "hidden" }}>
-        {/* Header */}
-        <div style={{ display: "grid", gridTemplateColumns: hasExtra ? "36px 48px 1fr 1fr 1fr" : "36px 48px 1fr 1fr", gap: "8px", padding: "12px 20px", background: `linear-gradient(135deg,${C.blue},#8b1a8f)` }}>
-          {["Yr", "Date", "Balance", ...(hasExtra ? ["+Extra"] : []), "Int Paid"].map(h => (
-            <div key={h} style={{ fontSize: "11px", color: "rgba(255,255,255,0.85)", fontFamily: SF, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: h === "Yr" || h === "Date" ? "left" : "right" }}>{h}</div>
+        {/* Column group labels when extra active */}
+        {hasExtra && (
+          <div style={{ display: "grid", gridTemplateColumns: "84px 1fr 1fr", background: `linear-gradient(135deg,${C.blue},#8b1a8f)`, padding: "8px 20px 0" }}>
+            <div />
+            <div style={{ fontSize: "10px", fontWeight: 700, color: "rgba(255,255,255,0.95)", fontFamily: SF, textAlign: "center", letterSpacing: "0.08em", textTransform: "uppercase", background: "rgba(255,255,255,0.15)", borderRadius: "4px 4px 0 0", padding: "3px 6px" }}>W/ Extra</div>
+            <div style={{ fontSize: "10px", fontWeight: 700, color: "rgba(255,255,255,0.60)", fontFamily: SF, textAlign: "center", letterSpacing: "0.08em", textTransform: "uppercase", padding: "3px 6px" }}>No Extra</div>
+          </div>
+        )}
+        {/* Header row */}
+        <div style={{ display: "grid", gridTemplateColumns: hasExtra ? "36px 48px 1fr 1fr 1fr 1fr" : "36px 48px 1fr 1fr", gap: "6px", padding: hasExtra ? "8px 20px 10px" : "12px 20px", background: `linear-gradient(135deg,${C.blue},#8b1a8f)` }}>
+          {["Yr", "Date",
+            ...(hasExtra ? ["Bal", "Int"] : ["Balance", "Int Paid"]),
+            ...(hasExtra ? ["Bal", "Int"] : [])
+          ].map((h, idx) => (
+            <div key={idx} style={{ fontSize: "11px", color: idx < 4 && hasExtra && idx >= 2 ? "rgba(255,255,255,0.95)" : idx >= 4 ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.85)", fontFamily: SF, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: idx < 2 ? "left" : "right" }}>{h}</div>
           ))}
         </div>
-        {/* Rows — base always drives structure; withExtra drives +Extra column */}
+        {/* Rows */}
         {base.rows.map((row, i) => {
           const eRow = withExtra.rows[i];
           const eBal = eRow ? eRow.balance : null;
+          const eInt = eRow ? eRow.totalInterestPaid : null;
           const isPaidEarly = hasExtra && !eRow;
           return (
             <div key={i}>
@@ -715,20 +730,36 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
                   </div>
                 </div>
               ))}
-              <div style={{ display: "grid", gridTemplateColumns: hasExtra ? "36px 48px 1fr 1fr 1fr" : "36px 48px 1fr 1fr", gap: "8px", padding: "13px 20px", background: i % 2 === 0 ? "#fff" : "rgba(120,80,160,0.04)", borderBottom: "0.5px solid rgba(60,0,80,0.07)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: hasExtra ? "36px 48px 1fr 1fr 1fr 1fr" : "36px 48px 1fr 1fr", gap: "6px", padding: "12px 20px", background: i % 2 === 0 ? "#fff" : "rgba(120,80,160,0.04)", borderBottom: "0.5px solid rgba(60,0,80,0.07)" }}>
                 <div style={{ fontSize: "13px", fontWeight: 700, color: C.blue, fontFamily: SF }}>{row.year}</div>
-                <div style={{ fontSize: "12px", color: C.dim, fontFamily: SF }}>{getYearDate(row.year)}</div>
-                <div style={{ fontSize: "13px", fontWeight: 600, color: C.text, fontFamily: SF, textAlign: "right" }}>
-                  {row.balance < 1 ? <span style={{ color: C.green }}>✓</span> : fmt(row.balance)}
-                </div>
-                {hasExtra && (
-                  <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: SF, textAlign: "right", color: isPaidEarly ? C.green : eBal !== null && eBal < row.balance ? C.green : C.dim }}>
-                    {isPaidEarly ? "✓ paid off" : eBal !== null ? fmt(eBal) : "—"}
-                  </div>
+                <div style={{ fontSize: "11px", color: C.dim, fontFamily: SF }}>{getYearDate(row.year)}</div>
+                {/* W/ Extra columns */}
+                {hasExtra ? (
+                  <>
+                    <div style={{ fontSize: "12px", fontWeight: 600, fontFamily: SF, textAlign: "right", color: isPaidEarly ? C.green : eBal !== null && eBal < row.balance ? C.green : C.text }}>
+                      {isPaidEarly ? "✓" : eBal !== null ? fmt(eBal) : "—"}
+                    </div>
+                    <div style={{ fontSize: "12px", fontFamily: SF, textAlign: "right", color: isPaidEarly ? C.green : C.text }}>
+                      {isPaidEarly ? "—" : eInt !== null ? fmt(eInt) : "—"}
+                    </div>
+                    {/* No Extra columns */}
+                    <div style={{ fontSize: "12px", fontWeight: 600, fontFamily: SF, textAlign: "right", color: "rgba(120,80,160,0.50)" }}>
+                      {row.balance < 1 ? "✓" : fmt(row.balance)}
+                    </div>
+                    <div style={{ fontSize: "12px", fontFamily: SF, textAlign: "right", color: "rgba(120,80,160,0.40)" }}>
+                      {fmt(row.totalInterestPaid)}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: C.text, fontFamily: SF, textAlign: "right" }}>
+                      {row.balance < 1 ? <span style={{ color: C.green }}>✓</span> : fmt(row.balance)}
+                    </div>
+                    <div style={{ fontSize: "13px", color: C.dim, fontFamily: SF, textAlign: "right" }}>
+                      {fmt(row.totalInterestPaid)}
+                    </div>
+                  </>
                 )}
-                <div style={{ fontSize: "13px", color: C.dim, fontFamily: SF, textAlign: "right" }}>
-                  {fmt(row.totalInterestPaid)}
-                </div>
               </div>
             </div>
           );
