@@ -429,9 +429,7 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
           </select>
         </div>
       </Card>
-      <div style={{ background: C.amberBg, border: "1px solid " + C.amber + "40", borderRadius: "12px", padding: "12px 16px", marginBottom: "8px", fontSize: "14px", color: C.mid, fontFamily: SF, lineHeight: 1.6 }}>
-        <span style={{ fontWeight: 700, color: C.amber }}>Recast at month {overlapMonths}</span> — proceeds reduce balance · payment {"→"} {fmtFull(recastPI)}/mo
-      </div>
+
       <Card>
         <SectionLabel>Extra Payments</SectionLabel>
 
@@ -2009,87 +2007,76 @@ Use current real rates from your web search. The values in the template above ar
           <div style={{ background: `linear-gradient(135deg,#c0166a 0%,#8b1a8f 50%,#0b5f8f 100%)`, borderRadius: "16px", padding: "18px", marginBottom: "14px", boxShadow: "0 4px 20px rgba(192,22,106,0.2)", position: "relative", overflow: "hidden" }}>
             <div style={{ position: "absolute", top: "-40px", right: "-40px", width: "140px", height: "140px", borderRadius: "50%", background: "rgba(255,255,255,0.07)" }} />
 
-            {/* First Home — just the mortgage payment */}
-            {isFirstHome && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", textAlign: "center" }}>
-                {[
-                  { label: "Monthly Payment",   val: fmtFull(calc.newTotal),  sub: "P+I" + (includeEscrow ? " + escrow" : "") + (calc.needsPMI ? " + PMI" : "") },
-                  { label: "Loan Amount",        val: fmt(calc.principal),     sub: (calc.effDownPct).toFixed(1) + "% down" },
-                ].map(({ label, val, sub }, i) => (
-                  <div key={i} style={{ background: "rgba(255,255,255,0.13)", borderRadius: "10px", padding: "14px 10px" }}>
-                    <div style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.6)", fontFamily: SF, marginBottom: "3px" }}>{label}</div>
-                    <div style={{ fontSize: "clamp(0.85rem,3.8vw,1.1rem)", fontWeight: 800, color: "#fff", fontFamily: SF, lineHeight: 1.1 }}>{val}</div>
-                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", fontFamily: SF, marginTop: "2px" }}>{sub}</div>
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* Payment Timeline — works for all modes */}
+            {(() => {
+              // Build a list of payment milestones in chronological order
+              const milestones = [];
 
-            {/* Sell First — mortgage + proceeds */}
-            {isSellFirst && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", textAlign: "center" }}>
-                {[
-                  { label: "New Mortgage",   val: fmtFull(calc.newTotal),    sub: "/ month" },
-                  { label: "Net Proceeds",   val: fmt(calc.netProceeds),      sub: "from sale" },
-                ].map(({ label, val, sub }, i) => (
-                  <div key={i} style={{ background: "rgba(255,255,255,0.13)", borderRadius: "10px", padding: "14px 10px" }}>
-                    <div style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.6)", fontFamily: SF, marginBottom: "3px" }}>{label}</div>
-                    <div style={{ fontSize: "clamp(0.85rem,3.8vw,1.1rem)", fontWeight: 800, color: "#fff", fontFamily: SF, lineHeight: 1.1 }}>{val}</div>
-                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", fontFamily: SF, marginTop: "2px" }}>{sub}</div>
-                  </div>
-                ))}
-              </div>
-            )}
+              // 1. Initial mortgage payment (always first)
+              milestones.push({
+                label: "Initial Payment",
+                val: fmtFull(calc.newTotal),
+                sub: MONTHS_ABBR[loanStartMonth - 1] + " " + loanStartYear,
+                highlight: false,
+              });
 
-            {/* Buy First — full picture: new mortgage, overlap, after recast */}
-            {isBuyFirst && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", textAlign: "center" }}>
-                {[
-                  { label: "New Mortgage",              val: fmtFull(calc.newTotal),         sub: "/ month" },
-                  { label: "Overlap " + overlapMonths + "mo", val: fmtFull(calc.combinedMonthly), sub: "/ month" },
-                  { label: "After Recast",               val: fmtFull(calc.recastTotal),      sub: "/ month" },
-                ].map(({ label, val, sub }, i) => (
-                  <div key={i} style={{ background: "rgba(255,255,255,0.13)", borderRadius: "10px", padding: "14px 10px" }}>
-                    <div style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.6)", fontFamily: SF, marginBottom: "3px" }}>{label}</div>
-                    <div style={{ fontSize: "clamp(0.78rem,3.5vw,1rem)", fontWeight: 800, color: "#fff", fontFamily: SF, lineHeight: 1.1 }}>{val}</div>
-                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", fontFamily: SF, marginTop: "2px" }}>{sub}</div>
-                  </div>
-                ))}
-              </div>
-            )}
+              // 2. After proceeds recast (Buy First only)
+              if (isBuyFirst && recastEnabled && calc.recastTotal < calc.newTotal) {
+                const recastDate = new Date(loanStartYear, loanStartMonth - 1 + overlapMonths, 1);
+                milestones.push({
+                  label: "After Recast",
+                  val: fmtFull(calc.recastTotal),
+                  sub: MONTHS_ABBR[recastDate.getMonth()] + " " + recastDate.getFullYear(),
+                  highlight: true,
+                });
+              }
 
-            {/* Footer row — mode specific */}
-            <div style={{ marginTop: "14px", padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.18)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              {isFirstHome && <>
-                <div>
-                  <div style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", fontFamily: SF }}>Home price</div>
-                  <div style={{ fontSize: "17px", fontWeight: 800, color: "#fff", fontFamily: SF }}>{fmt(homePrice)}</div>
+              // 3. After manual future recasts
+              manualRecasts.filter(rc => rc.enabled && rc.lump > 0).sort((a,b) => a.year !== b.year ? a.year-b.year : a.month-b.month).forEach(rc => {
+                milestones.push({
+                  label: "Future Recast",
+                  val: "↓ " + fmt(rc.lump) + " applied",
+                  sub: MONTHS_ABBR[rc.month - 1] + " " + rc.year,
+                  highlight: true,
+                });
+              });
+
+              // 4. After refinance
+              if (refiEnabled && calc.refiTotal) {
+                const refiDate = new Date(refiYear, refiMonth - 1, 1);
+                milestones.push({
+                  label: "After Refi",
+                  val: fmtFull(calc.refiTotal),
+                  sub: MONTHS_ABBR[refiDate.getMonth()] + " " + refiDate.getFullYear(),
+                  highlight: true,
+                });
+              }
+
+              // Layout: 2 per row
+              const cols = Math.min(milestones.length, 2);
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: "8px", textAlign: "center" }}>
+                  {milestones.map(({ label, val, sub, highlight }, i) => (
+                    <div key={i} style={{ background: highlight ? "rgba(255,255,255,0.20)" : "rgba(255,255,255,0.12)", borderRadius: "10px", padding: "12px 8px", border: highlight ? "1px solid rgba(255,255,255,0.25)" : "none" }}>
+                      <div style={{ fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.60)", fontFamily: SF, marginBottom: "3px" }}>{label}</div>
+                      <div style={{ fontSize: "clamp(0.80rem,3.5vw,1.05rem)", fontWeight: 800, color: "#fff", fontFamily: SF, lineHeight: 1.1 }}>{val}</div>
+                      <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)", fontFamily: SF, marginTop: "3px" }}>{sub}</div>
+                    </div>
+                  ))}
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", fontFamily: SF }}>Rate</div>
-                  <div style={{ fontSize: "17px", fontWeight: 800, color: "#fff", fontFamily: SF }}>{rate.toFixed(2)}% · {term}yr</div>
-                </div>
-              </>}
-              {isSellFirst && <>
-                <div>
-                  <div style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", fontFamily: SF }}>Home price</div>
-                  <div style={{ fontSize: "17px", fontWeight: 800, color: "#fff", fontFamily: SF }}>{fmt(homePrice)}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", fontFamily: SF }}>Rate</div>
-                  <div style={{ fontSize: "17px", fontWeight: 800, color: "#fff", fontFamily: SF }}>{rate.toFixed(2)}% · {term}yr</div>
-                </div>
-              </>}
-              {isBuyFirst && <>
-                <div>
-                  <div style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", fontFamily: SF }}>Total overlap cost</div>
-                  <div style={{ fontSize: "17px", fontWeight: 800, color: "#fff", fontFamily: SF }}>{fmt(calc.totalBridgeCost)}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", fontFamily: SF }}>Savings post-recast</div>
-                  <div style={{ fontSize: "17px", fontWeight: 800, color: calc.monthlySavings > 0 ? "#6ee7b7" : "#fca5a5", fontFamily: SF }}>{calc.monthlySavings > 0 ? "-" : "+"}{fmtFull(Math.abs(calc.monthlySavings))}/mo</div>
-                </div>
-              </>}
+              );
+            })()}
+
+            {/* Footer — always show home price + rate */}
+            <div style={{ marginTop: "14px", padding: "14px 20px", borderTop: "1px solid rgba(255,255,255,0.18)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", fontFamily: SF }}>Home price</div>
+                <div style={{ fontSize: "17px", fontWeight: 800, color: "#fff", fontFamily: SF }}>{fmt(homePrice)}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", fontFamily: SF }}>Rate</div>
+                <div style={{ fontSize: "17px", fontWeight: 800, color: "#fff", fontFamily: SF }}>{rate.toFixed(2)}% · {term}yr</div>
+              </div>
             </div>
           </div>
 
