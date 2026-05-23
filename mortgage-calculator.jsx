@@ -285,7 +285,7 @@ function DollarInput({ label, value, onChange, hint }) {
 }
 
 // ── Amort Tab ─────────────────────────────────────────────────────────────────
-function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proceedsApplied, extraPayment, setExtraPayment, loanStartMonth, loanStartYear, setLoanStartMonth, setLoanStartYear, refiEnabled, setRefiEnabled, refiMonth, setRefiMonth, refiYear, setRefiYear, refiRate, setRefiRate, refiTermYears, setRefiTermYears, monthlyEscrow, manualRecasts, setManualRecasts, applyMonthly, setApplyMonthly, applyLumpSum, setApplyLumpSum, monthlyStartMonth, setMonthlyStartMonth, monthlyStartYear, setMonthlyStartYear, lumpAmount, setLumpAmount, lumpFreq, setLumpFreq, lumpMonth, setLumpMonth, lumpStartYear, setLumpStartYear }) {
+function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proceedsApplied, extraPayment, setExtraPayment, loanStartMonth, loanStartYear, setLoanStartMonth, setLoanStartYear, refiEnabled, setRefiEnabled, refiMonth, setRefiMonth, refiYear, setRefiYear, refiRate, setRefiRate, refiTermYears, setRefiTermYears, monthlyEscrow, manualRecasts, setManualRecasts, applyMonthly, setApplyMonthly, applyLumpSum, setApplyLumpSum, monthlyStartMonth, setMonthlyStartMonth, monthlyStartYear, setMonthlyStartYear, lumpAmount, setLumpAmount, lumpFreq, setLumpFreq, lumpMonth, setLumpMonth, lumpStartYear, setLumpStartYear, onSchedule }) {
   const [showRecastVsRefi, setShowRecastVsRefi] = useState(false);
   const mr = rate / 100 / 12;
   const currentYear = new Date().getFullYear();
@@ -403,6 +403,11 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
   const base      = buildSchedule(0, false);
   const withExtra = buildSchedule(applyMonthly ? extraPayment : 0, applyLumpSum);
   const hasExtra  = (applyMonthly && extraPayment > 0) || (applyLumpSum && lumpAmount > 0);
+
+  // Surface schedule results to parent for Summary tab
+  useEffect(() => {
+    if (onSchedule) onSchedule({ base, withExtra, hasExtra });
+  }, [base.totalInterest, base.finalMonth, withExtra.totalInterest, withExtra.finalMonth, hasExtra]);
   const moSaved   = base.finalMonth - withExtra.finalMonth;
   const intSaved  = base.totalInterest - withExtra.totalInterest;
   const yrSaved   = Math.floor(moSaved / 12), moRem = moSaved % 12;
@@ -1514,7 +1519,10 @@ Use current real rates from your web search. The values in the template above ar
   const [term,           setTerm]          = useState(() => initV("term"));
   const [includeEscrow,  setIncludeEscrow] = useState(() => initV("includeEscrow"));
   const [taxRate,        setTaxRate]       = useState(() => initV("taxRate"));
+  const [taxMode,        setTaxMode]       = useState(() => initV("taxMode") || "pct");   // "pct" | "dollar"
+  const [taxDollar,      setTaxDollar]     = useState(() => initV("taxDollar") || 0);
   const [insurance,      setInsurance]     = useState(() => initV("insurance"));
+  const [insMode,        setInsMode]       = useState(() => initV("insMode") || "dollar"); // "pct" | "dollar"
   const [insuranceManual,setInsuranceManual]=useState(() => initV("insuranceManual"));
   const [newHomeState,   setNewHomeState]  = useState(() => initV("newHomeState") || "Arkansas");
   const [newHomeCounty,  setNewHomeCounty] = useState(() => initV("newHomeCounty") || "");
@@ -1549,6 +1557,7 @@ Use current real rates from your web search. The values in the template above ar
   const [refiRate,       setRefiRate]      = useState(() => initV("refiRate"));
   const [refiTermYears,  setRefiTermYears] = useState(() => initV("refiTermYears"));
   const [manualRecasts, setManualRecasts] = useState(() => initV("manualRecasts") || [{ id: 1, enabled: false, month: new Date().getMonth() + 1, year: new Date().getFullYear() + 5, lump: 25000 }]);
+  const [amortResult, setAmortResult] = useState({ base: null, withExtra: null, hasExtra: false });
   const [applyMonthly,      setApplyMonthly]      = useState(() => initV("applyMonthly") || false);
   const [applyLumpSum,      setApplyLumpSum]       = useState(() => initV("applyLumpSum") || false);
   const [monthlyStartMonth, setMonthlyStartMonth]  = useState(() => initV("monthlyStartMonth") || new Date().getMonth() + 1);
@@ -1561,7 +1570,7 @@ Use current real rates from your web search. The values in the template above ar
   const [resaleYear,     setResaleYear]    = useState(() => initV("resaleYear"));
 
   // Persist
-  const allState = { tab, purchaseMode, hasCurrentHome, homePrice, downPct, downDollars, downMode, rate, term, includeEscrow, taxRate, insurance, insuranceManual, newHomeState, newHomeCounty, newHomeSqft, saleState, saleCounty, saleHomeSqft, affordMode, applyProceedsToDown, additionalDownDollars, currentPayment, currentUtilities, overlapMonths, salePrice, currentBalance, closingCostsPct, listingAgentPct, buyerAgentPct, buyerConcessions, recastEnabled, proceedsApplyPct, pmiRate, extraPayment, sqft, homeAgeRange, pricingMode, loanStartMonth, loanStartYear, refiEnabled, refiMonth, refiYear, refiRate, refiTermYears, resaleMonth, resaleYear, manualRecasts, applyMonthly, applyLumpSum, monthlyStartMonth, monthlyStartYear, lumpAmount, lumpFreq, lumpMonth, lumpStartYear };
+  const allState = { tab, purchaseMode, hasCurrentHome, homePrice, downPct, downDollars, downMode, rate, term, includeEscrow, taxRate, insurance, insuranceManual, newHomeState, newHomeCounty, newHomeSqft, saleState, saleCounty, saleHomeSqft, affordMode, applyProceedsToDown, additionalDownDollars, currentPayment, currentUtilities, overlapMonths, salePrice, currentBalance, closingCostsPct, listingAgentPct, buyerAgentPct, buyerConcessions, recastEnabled, proceedsApplyPct, pmiRate, extraPayment, sqft, homeAgeRange, pricingMode, loanStartMonth, loanStartYear, refiEnabled, refiMonth, refiYear, refiRate, refiTermYears, resaleMonth, resaleYear, manualRecasts, applyMonthly, applyLumpSum, monthlyStartMonth, monthlyStartYear, lumpAmount, lumpFreq, lumpMonth, lumpStartYear, taxMode, taxDollar, insMode };
   useEffect(() => { lsSet(STORAGE_KEY, allState); });
 
   // Mode flags — needed by memos below
@@ -2031,15 +2040,45 @@ Use current real rates from your web search. The values in the template above ar
                 });
               }
 
-              // 3. After manual future recasts
-              manualRecasts.filter(rc => rc.enabled && rc.lump > 0).sort((a,b) => a.year !== b.year ? a.year-b.year : a.month-b.month).forEach(rc => {
-                milestones.push({
-                  label: "Future Recast",
-                  val: "↓ " + fmt(rc.lump) + " applied",
-                  sub: MONTHS_ABBR[rc.month - 1] + " " + rc.year,
-                  highlight: true,
+              // 3. After manual future recasts — calculate new payment at each
+              let runningBal = calc.principal;
+              let runningMonth = 0;
+              const baseMR = rate / 100 / 12;
+              const baseTerm = term * 12;
+              // Fast-forward balance to proceeds recast point if applicable
+              if (isBuyFirst && recastEnabled && calc.proceedsApplied > 0) {
+                for (let m = 0; m < overlapMonths && runningBal > 0; m++) {
+                  const ic = runningBal * baseMR;
+                  runningBal = Math.max(0, runningBal - (calc.newPI - ic));
+                  runningMonth++;
+                }
+                runningBal = Math.max(0, runningBal - calc.proceedsApplied);
+              }
+              manualRecasts
+                .filter(rc => rc.enabled && rc.lump > 0)
+                .sort((a,b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
+                .forEach(rc => {
+                  // Fast-forward to recast date
+                  const s = new Date(loanStartYear, loanStartMonth - 1, 1);
+                  const t = new Date(rc.year, rc.month - 1, 1);
+                  const rcMonth = Math.max(0, (t.getFullYear() - s.getFullYear()) * 12 + t.getMonth() - s.getMonth());
+                  while (runningMonth < rcMonth && runningBal > 0) {
+                    const ic = runningBal * baseMR;
+                    const pi = runningBal > 0 ? Math.min(runningBal, (runningBal * baseMR * Math.pow(1 + baseMR, baseTerm - runningMonth)) / (Math.pow(1 + baseMR, baseTerm - runningMonth) - 1)) : 0;
+                    runningBal = Math.max(0, runningBal - (pi - ic));
+                    runningMonth++;
+                  }
+                  runningBal = Math.max(0, runningBal - rc.lump);
+                  const moLeft = Math.max(1, baseTerm - runningMonth);
+                  const newPIAfter = runningBal > 0 ? (runningBal * baseMR * Math.pow(1 + baseMR, moLeft)) / (Math.pow(1 + baseMR, moLeft) - 1) : 0;
+                  const newPayment = newPIAfter + (includeEscrow ? (homePrice * (taxRate / 100) / 12) + insurance : 0);
+                  milestones.push({
+                    label: "Future Recast " + (manualRecasts.filter(r => r.enabled && r.lump > 0).length > 1 ? (manualRecasts.filter(r => r.enabled && r.lump > 0).sort((a,b) => a.year - b.year || a.month - b.month).indexOf(rc) + 1) : ""),
+                    val: fmtFull(newPayment),
+                    sub: MONTHS_ABBR[rc.month - 1] + " " + rc.year,
+                    highlight: true,
+                  });
                 });
-              });
 
               // 4. After refinance
               if (refiEnabled && calc.refiTotal) {
@@ -2167,11 +2206,39 @@ Use current real rates from your web search. The values in the template above ar
                 <Card style={{ animation: "fadeIn 0.2s ease" }}>
                   <SectionLabel>Escrow — Tax and Insurance</SectionLabel>
                   {taxLookup
-                    ? <div style={{ fontSize: "12px", color: C.green, fontFamily: SF, marginBottom: "14px" }}>{"✓"} {taxLookup.name} — {taxLookup.rate}% · from location above</div>
+                    ? <div style={{ fontSize: "12px", color: C.green, fontFamily: SF, padding: "0 20px 8px" }}>{"✓"} {taxLookup.name} — {taxLookup.rate}% · auto-filled from location</div>
                     : <div style={{ fontSize: "12px", color: C.amber, fontFamily: SF, padding: "0 20px 14px" }}>Enter county in Location above to auto-fill tax rate</div>}
-                  <Field label="Property Tax Rate" badge={taxLookup ? "Tax Foundation 2024" : "manual"} value={taxRate} min={0.1} max={3.0} step={0.01} onChange={setTaxRate} display={v => v.toFixed(2) + "%"} parse={parseFloat} suffix="%" inputMode="decimal" />
-                  <Field label="Home Insurance / mo" badge={insuranceManual ? "custom" : "est. 1.35%/yr"} value={insurance} min={50} max={2000} step={10} onChange={handleInsuranceChange} display={v => "$" + v + "/mo"} parse={parseDollar} prefix="$" inputMode="numeric" />
-                  {insuranceManual && <button onClick={resetInsurance} style={{ fontSize: "12px", color: C.blueL, fontFamily: SF, background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: "-10px", marginBottom: "14px", display: "block" }}>{"<-"} Reset to estimate ({fmt(countyMonthlyInsurance)}/mo)</button>}
+
+                  {/* Property Tax — % or $/mo toggle */}
+                  <div style={{ borderBottom: "0.5px solid rgba(60,0,80,0.10)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px 8px" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: C.mid, fontFamily: SF }}>Property Tax</span>
+                      <div style={{ display: "flex", background: "rgba(120,80,160,0.10)", borderRadius: "8px", padding: "2px" }}>
+                        {["pct", "dollar"].map(m => (
+                          <button key={m} onClick={() => { setTaxMode(m); if (m === "dollar") setTaxDollar(Math.round((homePrice * taxRate / 100) / 12)); else setTaxRate(Math.round(((taxDollar * 12) / homePrice) * 10000) / 100); }} style={{ padding: "3px 12px", borderRadius: "6px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 600, fontFamily: SF, background: taxMode === m ? "#fff" : "transparent", color: taxMode === m ? C.blue : C.mid, boxShadow: taxMode === m ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }}>{m === "pct" ? "%" : "$"}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {taxMode === "pct"
+                      ? <Field label="" badge={taxLookup ? "Tax Foundation 2024" : "manual"} value={taxRate} min={0.1} max={3.0} step={0.01} onChange={v => { setTaxRate(v); setTaxDollar(Math.round(homePrice * v / 100 / 12)); }} display={v => v.toFixed(2) + "% = " + fmt(Math.round(homePrice * v / 100 / 12)) + "/mo"} parse={parseFloat} suffix="%" inputMode="decimal" />
+                      : <Field label="" value={taxDollar} min={0} max={5000} step={10} onChange={v => { setTaxDollar(v); setTaxRate(Math.round(v * 12 / homePrice * 10000) / 100); }} display={v => "$" + v + "/mo = " + (v * 12 / homePrice * 100).toFixed(2) + "%/yr"} parse={parseDollar} prefix="$" inputMode="numeric" />}
+                  </div>
+
+                  {/* Home Insurance — % or $/mo toggle */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px 8px" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: C.mid, fontFamily: SF }}>Home Insurance</span>
+                      <div style={{ display: "flex", background: "rgba(120,80,160,0.10)", borderRadius: "8px", padding: "2px" }}>
+                        {["pct", "dollar"].map(m => (
+                          <button key={m} onClick={() => setInsMode(m)} style={{ padding: "3px 12px", borderRadius: "6px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 600, fontFamily: SF, background: insMode === m ? "#fff" : "transparent", color: insMode === m ? C.blue : C.mid, boxShadow: insMode === m ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }}>{m === "pct" ? "%" : "$"}</button>
+                        ))}
+                      </div>
+                    </div>
+                    {insMode === "dollar"
+                      ? <Field label="" badge={insuranceManual ? "custom" : "est. 1.35%/yr"} value={insurance} min={50} max={2000} step={10} onChange={handleInsuranceChange} display={v => "$" + v + "/mo = " + (v * 12 / homePrice * 100).toFixed(2) + "%/yr"} parse={parseDollar} prefix="$" inputMode="numeric" />
+                      : <Field label="" value={Math.round(insurance * 12 / homePrice * 10000) / 100} min={0.1} max={3.0} step={0.05} onChange={v => handleInsuranceChange(Math.round(homePrice * v / 100 / 12))} display={v => v.toFixed(2) + "% = " + fmt(Math.round(homePrice * v / 100 / 12)) + "/mo"} parse={parseFloat} suffix="%" inputMode="decimal" />}
+                    {insuranceManual && <button onClick={resetInsurance} style={{ fontSize: "12px", color: C.blueL, fontFamily: SF, background: "none", border: "none", cursor: "pointer", padding: "0 20px 14px", display: "block" }}>{"←"} Reset to estimate ({fmt(countyMonthlyInsurance)}/mo)</button>}
+                  </div>
                 </Card>
               )}
 
@@ -2398,6 +2465,7 @@ Use current real rates from your web search. The values in the template above ar
               lumpFreq={lumpFreq} setLumpFreq={setLumpFreq}
               lumpMonth={lumpMonth} setLumpMonth={setLumpMonth}
               lumpStartYear={lumpStartYear} setLumpStartYear={setLumpStartYear}
+              onSchedule={r => setAmortResult(r)}
             />
           )}
 
@@ -2473,25 +2541,88 @@ Use current real rates from your web search. The values in the template above ar
               <div style={{ textAlign: "center", marginBottom: "8px" }}>
                 <div style={{ fontSize: "12px", color: C.dim, fontFamily: SF, letterSpacing: "0.08em" }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · {isFirstHome ? "First Home" : isSellFirst ? "Sell First" : "Buy First"}</div>
               </div>
+
+              {/* Main tiles */}
               {[
-                { color: "#c0166a", label: "① New Mtg",       val: fmtFull(calc.newTotal),        sub: fmt(homePrice) + " · " + (downMode === "dollar" ? ((downDollars / homePrice) * 100).toFixed(0) : downPct) + "% dn · " + rate.toFixed(2) + "% · " + term + "yr", extra: calc.needsPMI ? "PMI " + fmtFull(calc.monthlyPMI) + "/mo" : "" },
+                { color: "#c0166a", label: "① New Mtg",       val: fmtFull(calc.newTotal),     sub: fmt(homePrice) + " · " + (downMode === "dollar" ? ((downDollars / homePrice) * 100).toFixed(0) : downPct) + "% dn · " + rate.toFixed(2) + "% · " + term + "yr", extra: calc.needsPMI ? "PMI " + fmtFull(calc.monthlyPMI) + "/mo" : "" },
                 { color: "#6d1fa0", label: "② Overlap " + overlapMonths + "mo", val: fmtFull(calc.combinedMonthly), sub: "New " + fmtFull(calc.newTotal) + " + " + fmtFull(currentPayment), extra: "Total " + fmt(calc.totalBridgeCost) },
-                { color: "#0b6e6e", label: "③ Sale Proceeds", val: fmt(calc.netProceeds),         sub: fmt(salePrice) + " sale",                                                                    extra: "Costs " + calc.totalSellingPct.toFixed(1) + "% · Payoff " + fmt(currentBalance) },
-                { color: "#0b8f8f", label: "④ After Recast",  val: fmtFull(calc.recastTotal) + "/mo", sub: "Bal " + fmt(calc.recastPrincipal),                                                  extra: "Save " + fmtFull(calc.monthlySavings) + "/mo" },
+                { color: "#0b6e6e", label: "③ Sale Proceeds", val: fmt(calc.netProceeds),      sub: fmt(salePrice) + " sale", extra: "Costs " + calc.totalSellingPct.toFixed(1) + "% · Payoff " + fmt(currentBalance) },
+                { color: "#0b8f8f", label: "④ After Recast",  val: fmtFull(calc.recastTotal) + "/mo", sub: "Bal " + fmt(calc.recastPrincipal), extra: "Save " + fmtFull(calc.monthlySavings) + "/mo" },
                 { color: "#8b1a8f", label: "⑤ Resale " + (resaleCalc.yrs > 0 ? resaleCalc.yrs + "yr" : "") + (resaleCalc.mos > 0 ? " " + resaleCalc.mos + "mo" : ""), val: fmt(resaleCalc.netResaleProceeds), sub: newHomeSqft.toLocaleString() + " sqft · $" + resaleCalc.activePpsf + "/ft", extra: "Est. " + fmt(resaleCalc.projectedPrice) },
-                { color: "#a01660", label: "⑥ Total Interest", val: (() => { const mr2 = rate/100/12; let b = calc.principal, tot = 0, pi = calc.newPI, rp = calc.recastPI || pi; for (let m = 0; m < term*12 && b > 0.01; m++) { if (m === overlapMonths) { b = Math.max(0, b - calc.proceedsApplied); pi = rp; } const ic = b*mr2; b = Math.max(0, b - Math.min(b, pi - ic + extraPayment)); tot += ic; } return fmt(tot); })(), sub: "Over loan life", extra: extraPayment > 0 ? "+" + fmt(extraPayment) + "/mo extra" : "" },
+                { color: "#a01660", label: "⑥ Total Interest",
+                  val: amortResult.base ? fmt(amortResult.base.totalInterest) : fmt(Math.round(calc.newPI * term * 12 - calc.principal)),
+                  sub: amortResult.withExtra && amortResult.hasExtra ? fmt(amortResult.withExtra.totalInterest) + " w/ extra" : "Over loan life",
+                  extra: amortResult.hasExtra && amortResult.base
+                    ? "Save " + fmt(amortResult.base.totalInterest - amortResult.withExtra.totalInterest)
+                    : "",
+                  extraColor: "#6ee7b7",
+                },
               ].reduce((rows, item, i) => { if (i % 2 === 0) rows.push([item]); else rows[rows.length - 1].push(item); return rows; }, []).map((pair, ri) => (
                 <div key={ri} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
-                  {pair.map(({ color, label, val, sub, extra }) => (
-                    <div key={label} style={{ background: color, borderRadius: "12px", padding: "0.7rem 12px" }}>
+                  {pair.map(({ color, label, val, sub, extra, extraColor }) => (
+                    <div key={label} style={{ background: color, borderRadius: "12px", padding: "12px 12px" }}>
                       <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
                       <div style={{ fontSize: "18px", fontWeight: 800, color: "#fff", fontFamily: SF, lineHeight: 1.1, marginTop: "2px" }}>{val}</div>
                       <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.80)", fontFamily: SF, fontWeight: 600, marginTop: "6px" }}>{sub}</div>
-                      {extra && <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF }}>{extra}</div>}
+                      {extra && <div style={{ fontSize: "11px", color: extraColor || "rgba(255,255,255,0.65)", fontFamily: SF }}>{extra}</div>}
                     </div>
                   ))}
                 </div>
               ))}
+
+              {/* Extra payment tiles — only show when active */}
+              {(applyMonthly || applyLumpSum) && (
+                <div style={{ display: "grid", gridTemplateColumns: applyMonthly && applyLumpSum ? "1fr 1fr" : "1fr", gap: "8px", marginBottom: "8px" }}>
+                  {applyMonthly && extraPayment > 0 && (
+                    <div style={{ background: "#1a7a4a", borderRadius: "12px", padding: "12px 12px" }}>
+                      <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF, textTransform: "uppercase", letterSpacing: "0.08em" }}>Monthly Extra</div>
+                      <div style={{ fontSize: "18px", fontWeight: 800, color: "#fff", fontFamily: SF, lineHeight: 1.1, marginTop: "2px" }}>+{fmtFull(extraPayment)}/mo</div>
+                      <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.80)", fontFamily: SF, marginTop: "6px" }}>from {MONTHS_ABBR[monthlyStartMonth - 1]} {monthlyStartYear}</div>
+                      {amortResult.hasExtra && amortResult.base && (
+                        <div style={{ fontSize: "11px", color: "#6ee7b7", fontFamily: SF }}>
+                          {Math.floor((amortResult.base.finalMonth - amortResult.withExtra.finalMonth) / 12)}yr {(amortResult.base.finalMonth - amortResult.withExtra.finalMonth) % 12}mo saved
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {applyLumpSum && lumpAmount > 0 && (
+                    <div style={{ background: "#1a5a7a", borderRadius: "12px", padding: "12px 12px" }}>
+                      <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF, textTransform: "uppercase", letterSpacing: "0.08em" }}>Lump Sum</div>
+                      <div style={{ fontSize: "18px", fontWeight: 800, color: "#fff", fontFamily: SF, lineHeight: 1.1, marginTop: "2px" }}>{fmt(lumpAmount)}</div>
+                      <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.80)", fontFamily: SF, marginTop: "6px" }}>{lumpFreq === "quarterly" ? "Quarterly" : lumpFreq === "biannual" ? "Biannually" : "Annually"} · {MONTHS_ABBR[lumpMonth - 1]} {lumpStartYear}</div>
+                      {amortResult.hasExtra && amortResult.base && !applyMonthly && (
+                        <div style={{ fontSize: "11px", color: "#6ee7b7", fontFamily: SF }}>
+                          {Math.floor((amortResult.base.finalMonth - amortResult.withExtra.finalMonth) / 12)}yr {(amortResult.base.finalMonth - amortResult.withExtra.finalMonth) % 12}mo saved
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Payoff date tile */}
+              {amortResult.base && (
+                <div style={{ background: "#3d0070", borderRadius: "12px", padding: "12px 12px", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF, textTransform: "uppercase", letterSpacing: "0.08em" }}>Payoff Date</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "4px" }}>
+                    <div>
+                      <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)", fontFamily: SF }}>Base schedule</div>
+                      <div style={{ fontSize: "16px", fontWeight: 700, color: "#fff", fontFamily: SF }}>
+                        {(() => { const d = new Date(loanStartYear, loanStartMonth - 1 + amortResult.base.finalMonth, 1); return MONTHS_ABBR[d.getMonth()] + " " + d.getFullYear(); })()}
+                      </div>
+                    </div>
+                    {amortResult.hasExtra && (
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)", fontFamily: SF }}>With extra</div>
+                        <div style={{ fontSize: "16px", fontWeight: 700, color: "#6ee7b7", fontFamily: SF }}>
+                          {(() => { const d = new Date(loanStartYear, loanStartMonth - 1 + amortResult.withExtra.finalMonth, 1); return MONTHS_ABBR[d.getMonth()] + " " + d.getFullYear(); })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div style={{ textAlign: "center", background: C.pill, border: "none", borderRadius: "8px", padding: "10px 16px", fontSize: "12px", color: C.pillText, fontFamily: SF, letterSpacing: "0.06em", marginBottom: "14px" }}>Screenshot to save · All values from your inputs</div>
               <button onClick={saveScenario} style={{ width: "100%", padding: "16px", background: `linear-gradient(135deg,${C.blue},#8b1a8f)`, color: "#fff", border: "none", borderRadius: "12px", fontSize: "15px", fontWeight: 800, fontFamily: SF, cursor: "pointer" }}>Save This Scenario</button>
             </div>
