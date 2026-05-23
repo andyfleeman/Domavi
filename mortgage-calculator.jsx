@@ -407,7 +407,7 @@ function AmortTab({ principal, rate, term, newPI, overlapMonths, recastPI, proce
   // Surface schedule results to parent for Summary tab
   useEffect(() => {
     if (onSchedule) onSchedule({ base, withExtra, hasExtra });
-  }, [base.totalInterest, base.finalMonth, withExtra.totalInterest, withExtra.finalMonth, hasExtra]);
+  });
   const moSaved   = base.finalMonth - withExtra.finalMonth;
   const intSaved  = base.totalInterest - withExtra.totalInterest;
   const yrSaved   = Math.floor(moSaved / 12), moRem = moSaved % 12;
@@ -2650,7 +2650,7 @@ Use current real rates from your web search. The values in the template above ar
 
           {/* Footer */}
           <div style={{ textAlign: "center", fontSize: "11px", color: C.dim, fontFamily: SF, letterSpacing: "0.04em", marginTop: "14px", lineHeight: 1.7, padding: "0 8px 120px" }}>
-            {"© 2025 Domavi Mortgage™ · All rights reserved · For informational purposes only · Not financial, legal, or lending advice · Tax data: Tax Foundation 2024 · Consult a licensed lender and agent for actual figures"}
+            {"© " + new Date().getFullYear() + " Domavi Mortgage™ · All rights reserved · For informational purposes only · Not financial, legal, or lending advice · Tax data: Tax Foundation 2024 · Consult a licensed lender and agent for actual figures"}
           </div>
 
         </div>
