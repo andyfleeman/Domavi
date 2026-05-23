@@ -1404,6 +1404,31 @@ function HelpDrawer({ tab }) {
   );
 }
 
+// ── Tab Strip — scrolls active tab into center on every change ────────────────
+function TabStrip({ tabs, active, onSelect }) {
+  const containerRef = useRef(null);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const el = containerRef.current.querySelector('[data-active="true"]');
+    if (el) el.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  }, [active]);
+  return (
+    <div ref={containerRef} style={{ flex: 1, display: "flex", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+      {tabs.map(t => {
+        const isActive = t.id === active;
+        return (
+          <button key={t.id} onClick={() => onSelect(t.id)}
+            data-active={isActive ? "true" : "false"}
+            style={{ flex: "0 0 auto", minWidth: "60px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "8px 10px 10px", background: "none", border: "none", cursor: "pointer", position: "relative" }}>
+            {isActive && <div style={{ position: "absolute", top: 0, left: "20%", right: "20%", height: "2.5px", borderRadius: "0 0 2px 2px", background: C.blue }} />}
+            <span style={{ fontSize: "11px", fontWeight: isActive ? 700 : 400, color: isActive ? C.blue : C.dim, fontFamily: SF, whiteSpace: "nowrap", marginTop: "4px" }}>{t.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function DomaviMortgage() {
   useEffect(() => {
     // PWA home screen icons
@@ -2666,20 +2691,8 @@ Use current real rates from your web search. The values in the template above ar
             </svg>
           </button>
 
-          {/* Tab labels — scroll active into view */}
-          <div style={{ flex: 1, display: "flex", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
-            {TABS.map(t => {
-              const active = t.id === tab;
-              return (
-                <button key={t.id} onClick={() => goToTab(t.id)}
-                  ref={el => { if (active && el) el.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" }); }}
-                  style={{ flex: "0 0 auto", minWidth: "60px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "8px 10px 10px", background: "none", border: "none", cursor: "pointer", position: "relative" }}>
-                  {active && <div style={{ position: "absolute", top: 0, left: "20%", right: "20%", height: "2.5px", borderRadius: "0 0 2px 2px", background: C.blue }} />}
-                  <span style={{ fontSize: "11px", fontWeight: active ? 700 : 400, color: active ? C.blue : C.dim, fontFamily: SF, whiteSpace: "nowrap", marginTop: "4px" }}>{t.label}</span>
-                </button>
-              );
-            })}
-          </div>
+          {/* Tab labels */}
+          <TabStrip tabs={TABS} active={tab} onSelect={goToTab} />
 
           {/* Next button */}
           <button onClick={() => nextTab && goToTab(nextTab)} disabled={!nextTab}
