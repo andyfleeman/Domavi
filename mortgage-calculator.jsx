@@ -2599,7 +2599,7 @@ Use current real rates from your web search. The values in the template above ar
                 </div>
               )}
 
-              {/* Total Interest tile */}
+              {/* Total Interest + Resale — row of 2 */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
                 <div style={{ background: "#a01660", borderRadius: "12px", padding: "12px 12px" }}>
                   <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF, textTransform: "uppercase", letterSpacing: "0.08em" }}>⑤ Total Interest</div>
@@ -2613,28 +2613,6 @@ Use current real rates from your web search. The values in the template above ar
                     <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF }}>Save {fmt(amortResult.base.totalInterest - amortResult.withExtra.totalInterest)}</div>
                   )}
                 </div>
-
-                {/* Payoff date tile */}
-                {amortResult.base && (
-                  <div style={{ background: "#3d0070", borderRadius: "12px", padding: "12px 12px" }}>
-                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF, textTransform: "uppercase", letterSpacing: "0.08em" }}>Payoff Date</div>
-                    <div style={{ fontSize: "16px", fontWeight: 700, color: "#fff", fontFamily: SF, marginTop: "4px" }}>
-                      {(() => { const d = new Date(loanStartYear, loanStartMonth - 1 + amortResult.base.finalMonth, 1); return MONTHS_ABBR[d.getMonth()] + " " + d.getFullYear(); })()}
-                    </div>
-                    {amortResult.hasExtra && (
-                      <>
-                        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)", fontFamily: SF, marginTop: "6px" }}>w/ extra</div>
-                        <div style={{ fontSize: "14px", fontWeight: 700, color: "#6ee7b7", fontFamily: SF }}>
-                          {(() => { const d = new Date(loanStartYear, loanStartMonth - 1 + amortResult.withExtra.finalMonth, 1); return MONTHS_ABBR[d.getMonth()] + " " + d.getFullYear(); })()}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Resale — always last */}
-              <div style={{ marginBottom: "8px" }}>
                 <div style={{ background: "#8b1a8f", borderRadius: "12px", padding: "12px 12px" }}>
                   <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF, textTransform: "uppercase", letterSpacing: "0.08em" }}>⑥ Resale {resaleCalc.yrs > 0 ? resaleCalc.yrs + "yr" : ""}{resaleCalc.mos > 0 ? " " + resaleCalc.mos + "mo" : ""}</div>
                   <div style={{ fontSize: "18px", fontWeight: 800, color: "#fff", fontFamily: SF, lineHeight: 1.1, marginTop: "2px" }}>{fmt(resaleCalc.netResaleProceeds)}</div>
@@ -2642,6 +2620,26 @@ Use current real rates from your web search. The values in the template above ar
                   <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF }}>Est. {fmt(resaleCalc.projectedPrice)}</div>
                 </div>
               </div>
+
+              {/* Payoff Date — full width */}
+              {amortResult.base && (
+                <div style={{ background: "#3d0070", borderRadius: "12px", padding: "12px 16px", marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.65)", fontFamily: SF, textTransform: "uppercase", letterSpacing: "0.08em" }}>Payoff Date</div>
+                    <div style={{ fontSize: "18px", fontWeight: 700, color: "#fff", fontFamily: SF, marginTop: "4px" }}>
+                      {(() => { const d = new Date(loanStartYear, loanStartMonth - 1 + amortResult.base.finalMonth, 1); return MONTHS_ABBR[d.getMonth()] + " " + d.getFullYear(); })()}
+                    </div>
+                  </div>
+                  {amortResult.hasExtra && (
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)", fontFamily: SF }}>w/ extra</div>
+                      <div style={{ fontSize: "18px", fontWeight: 700, color: "#6ee7b7", fontFamily: SF }}>
+                        {(() => { const d = new Date(loanStartYear, loanStartMonth - 1 + amortResult.withExtra.finalMonth, 1); return MONTHS_ABBR[d.getMonth()] + " " + d.getFullYear(); })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div style={{ textAlign: "center", background: C.pill, border: "none", borderRadius: "8px", padding: "10px 16px", fontSize: "12px", color: C.pillText, fontFamily: SF, letterSpacing: "0.06em", marginBottom: "14px" }}>Screenshot to save · All values from your inputs</div>
               <button onClick={saveScenario} style={{ width: "100%", padding: "16px", background: `linear-gradient(135deg,${C.blue},#8b1a8f)`, color: "#fff", border: "none", borderRadius: "12px", fontSize: "15px", fontWeight: 800, fontFamily: SF, cursor: "pointer" }}>Save This Scenario</button>
@@ -2668,12 +2666,13 @@ Use current real rates from your web search. The values in the template above ar
             </svg>
           </button>
 
-          {/* Tab labels */}
-          <div style={{ flex: 1, display: "flex", overflowX: "auto", scrollbarWidth: "none" }}>
+          {/* Tab labels — scroll active into view */}
+          <div style={{ flex: 1, display: "flex", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
             {TABS.map(t => {
               const active = t.id === tab;
               return (
                 <button key={t.id} onClick={() => goToTab(t.id)}
+                  ref={el => { if (active && el) el.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" }); }}
                   style={{ flex: "0 0 auto", minWidth: "60px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "8px 10px 10px", background: "none", border: "none", cursor: "pointer", position: "relative" }}>
                   {active && <div style={{ position: "absolute", top: 0, left: "20%", right: "20%", height: "2.5px", borderRadius: "0 0 2px 2px", background: C.blue }} />}
                   <span style={{ fontSize: "11px", fontWeight: active ? 700 : 400, color: active ? C.blue : C.dim, fontFamily: SF, whiteSpace: "nowrap", marginTop: "4px" }}>{t.label}</span>
